@@ -1,10 +1,13 @@
 [package]
 name = "svgm-core"
-description = "SVG optimization engine"
+description = "SVG optimization engine — fast, safe, fixed-point convergence SVG optimizer"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+keywords = ["svg", "optimizer", "minifier", "xml", "graphics"]
+categories = ["web-programming", "multimedia::images"]
+readme = "../../README.md"
 
 [dependencies]
 xmlparser.workspace = true

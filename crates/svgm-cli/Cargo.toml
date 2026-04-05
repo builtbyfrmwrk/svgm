@@ -1,10 +1,13 @@
 [package]
 name = "svgm"
-description = "SVG minimizer — fast, safe, single-pass SVG optimizer"
+description = "SVG minimizer — fast, safe, fixed-point convergence SVG optimizer"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+keywords = ["svg", "optimizer", "minifier", "cli", "web"]
+categories = ["command-line-utilities", "web-programming"]
+readme = "../../README.md"
 
 [[bin]]
 name = "svgm"
