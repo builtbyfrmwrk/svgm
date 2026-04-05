@@ -1,4 +1,5 @@
 pub mod cleanup_attrs;
+pub mod cleanup_ids;
 pub mod cleanup_numeric_values;
 pub mod collapse_groups;
 pub mod convert_colors;
@@ -58,6 +59,7 @@ pub fn default_passes() -> Vec<Box<dyn Pass>> {
         Box::new(convert_shape_to_path::ConvertShapeToPath::default()),
         Box::new(convert_transform::ConvertTransform::default()),
         Box::new(collapse_groups::CollapseGroups),
+        Box::new(cleanup_ids::CleanupIds),
         Box::new(convert_path_data::ConvertPathData::default()),
         Box::new(minify_whitespace::MinifyWhitespace),
     ]
