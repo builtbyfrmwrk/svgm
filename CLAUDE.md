@@ -54,7 +54,7 @@ Cargo workspace with two crates:
 
 - **`passes/mod.rs`** — Defines the `Pass` trait and `default_passes()` function that returns all passes in execution order. `PassResult` enum: `Changed` | `Unchanged`.
 
-- **`passes/*.rs`** — One file per pass. 23 passes total (22 default + 1 opt-in):
+- **`passes/*.rs`** — One file per pass. 25 passes total (24 default + 1 opt-in):
 
   **Removal passes:**
   - `remove_doctype.rs` — strip DOCTYPE declarations
@@ -69,6 +69,10 @@ Cargo workspace with two crates:
   - `remove_unused_namespaces.rs` — strip xmlns declarations whose prefix isn't used by any element or attribute
   - `remove_unknowns_and_defaults.rs` — strip attributes matching SVG spec defaults (`opacity="1"`, `stroke="none"`, `fill="black"`, etc.). Has a conservative `DEFAULT_ATTRS` table. Skips `fill` on `<svg>` element (inherited by children).
   - `remove_desc.rs` — **opt-in, NOT in default preset**. Strips `<desc>` and `<title>` (accessibility concern).
+
+  **CSS passes:**
+  - `inline_styles.rs` — merges multiple `<style>` elements, parses CSS rules, inlines safe rules as presentation attributes (enabling downstream passes to optimize them), removes unused rules, cleans up class attributes. Bails out of inlining when @rules detected. Supported selectors: `.class`, `#id`, `element`, `element.class`, comma-separated lists. Unsupported selectors preserved, never removed. Hand-rolled CSS parser, no external dependency.
+  - `minify_styles.rs` — minifies remaining CSS text in `<style>` elements: strips comments, collapses whitespace, removes trailing semicolons, shortens colors.
 
   **Normalization passes:**
   - `cleanup_attrs.rs` — collapse runs of whitespace in attribute values to single space, trim

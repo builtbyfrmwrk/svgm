@@ -149,6 +149,8 @@ fn has_potential_children(name: &str) -> bool {
             | "a"
             | "switch"
             | "foreignObject"
+            | "style"
+            | "script"
     )
 }
 

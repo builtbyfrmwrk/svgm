@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <style>
+    .cls-1 { fill: red; }
+    .cls-2 { stroke: blue; stroke-width: 2; }
+    .cls-unused { fill: green; }
+    .interactive:hover { opacity: 0.5; }
+    rect.special { fill: orange; }
+  </style>
+  <rect class="cls-1" width="100" height="100"/>
+  <circle class="cls-2" cx="150" cy="50" r="40"/>
+  <rect class="cls-1 interactive" x="0" y="100" width="100" height="100"/>
+  <rect class="special" x="100" y="100" width="100" height="100"/>
+</svg>

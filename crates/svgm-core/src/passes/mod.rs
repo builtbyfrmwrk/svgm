@@ -4,9 +4,11 @@ pub mod cleanup_numeric_values;
 pub mod collapse_groups;
 pub mod convert_colors;
 pub mod convert_path_data;
+pub mod inline_styles;
 pub mod convert_shape_to_path;
 pub mod convert_transform;
 pub mod merge_paths;
+pub mod minify_styles;
 pub mod minify_whitespace;
 pub mod remove_comments;
 pub mod remove_desc;
@@ -57,6 +59,7 @@ pub fn default_passes() -> Vec<Box<dyn Pass>> {
         Box::new(remove_hidden_elems::RemoveHiddenElems),
         Box::new(remove_unused_namespaces::RemoveUnusedNamespaces),
         Box::new(cleanup_attrs::CleanupAttrs),
+        Box::new(inline_styles::InlineStyles),
         Box::new(cleanup_numeric_values::CleanupNumericValues::default()),
         Box::new(convert_colors::ConvertColors),
         Box::new(remove_unknowns_and_defaults::RemoveUnknownsAndDefaults),
@@ -67,6 +70,7 @@ pub fn default_passes() -> Vec<Box<dyn Pass>> {
         Box::new(convert_path_data::ConvertPathData::default()),
         Box::new(merge_paths::MergePaths),
         Box::new(sort_attrs::SortAttrs),
+        Box::new(minify_styles::MinifyStyles),
         Box::new(minify_whitespace::MinifyWhitespace),
     ]
 }

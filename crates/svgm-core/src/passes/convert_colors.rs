@@ -49,7 +49,7 @@ impl Pass for ConvertColors {
 }
 
 /// Try to produce a shorter color representation.
-fn shorten_color(value: &str) -> Option<String> {
+pub(crate) fn shorten_color(value: &str) -> Option<String> {
     let trimmed = value.trim();
 
     // Normalize to #rrggbb first
