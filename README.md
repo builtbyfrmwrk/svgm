@@ -35,7 +35,7 @@
 
 SVG files exported from tools like Figma, Illustrator, and Inkscape often include metadata, redundant attributes, unnecessary wrapper structure, and verbose path data.
 
-[SVGO](https://github.com/svg/svgo) has been the standard SVG optimizer for years. svgm takes a different approach: a native Rust optimizer designed around fixed-point convergence, safe defaults, and a modern CLI. Similar to what [oxlint](https://oxc.rs) is to ESLint, svgm targets the same problem with a different architecture.
+[SVGO](https://github.com/svg/svgo) has been the standard SVG optimizer for years. svgm takes a different approach: a native Rust optimizer designed around fixed-point convergence, safe defaults, and a modern CLI. Like [oxlint](https://oxc.rs) for ESLint, svgm targets the same problem with a different architecture.
 
 ### Fixed-point convergence
 
@@ -117,7 +117,7 @@ xcode.svg                    36.7%        43.8%
 
 </details>
 
-svgm is closing the compression gap while staying significantly faster and shipping as a single native binary. Path, transform, and CSS optimizations are still expanding.
+svgm is closing the compression gap while staying significantly faster and shipping as a single native binary. Path, transform, and CSS optimizations are still being developed.
 
 ## How it works
 
