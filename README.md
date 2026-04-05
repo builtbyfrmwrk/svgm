@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  Fast, safe SVG optimizer written in Rust.
+  The SVG optimizer, rewritten in Rust.
 </p>
 
 <p align="center">
@@ -31,20 +31,17 @@
 
 ---
 
-## Why svgm?
+## About
 
-SVG files from editors like Figma, Illustrator, and Inkscape are bloated with metadata, redundant attributes, and unoptimized paths.
+SVG files exported from tools like Figma, Illustrator, and Inkscape carry metadata, redundant attributes, verbose path data, and unnecessary structure. svgm strips all of that in a single invocation.
 
-[SVGO](https://github.com/svg/svgo) is the standard optimizer, but it has problems:
+Like [oxlint](https://oxc.rs) is to ESLint, svgm is a ground-up Rust rewrite of the SVG optimization pipeline. Native speed, single binary, no runtime dependencies.
 
-```
-$ svgo icon.svg                    $ svgo icon.svg                    $ svgo icon.svg
-13.5 KiB - 50.8% = 6.6 KiB        6.6 KiB - 0.2% = 6.6 KiB         6.6 KiB - 0% = 6.6 KiB
-```
+### Fixed-point convergence
 
-**Why do you have to run it three times?** SVGO runs plugins in a fixed order. When a later plugin creates an opportunity for an earlier one, that opportunity is missed until the next run. Nested 3 levels deep = 3 runs to converge.
+Most SVG optimizers run plugins in a fixed sequence. When a later plugin creates an opportunity for an earlier one, that opportunity is missed until the next run.
 
-**svgm fixes this.** One command. Fully optimized. Every time.
+svgm takes a different approach: all passes run over an in-memory AST in a loop until the document stabilizes. No re-parsing between iterations. One invocation, fully converged.
 
 ```
 $ svgm icon.svg
@@ -52,8 +49,6 @@ $ svgm icon.svg
   icon.svg
   13.5 KiB -> 6.6 KiB (51.1% smaller)  0ms  3 passes
 ```
-
-svgm runs all optimization passes in a loop over the in-memory AST until nothing changes. No re-parsing between iterations. No manual multipass flag. One invocation, guaranteed convergence.
 
 ## Install
 
@@ -74,56 +69,28 @@ cargo build --release
 
 ## Usage
 
-### Optimize in place (default)
-
 ```bash
-svgm icon.svg
-```
-
-### Output to a different file
-
-```bash
-svgm icon.svg -o icon.min.svg
-```
-
-### Pipe to stdout
-
-```bash
-svgm icon.svg --stdout | gzip > icon.svgz
-```
-
-### Dry run
-
-```bash
-svgm icon.svg --dry-run
-```
-
-### Multiple files
-
-```bash
-svgm icons/*.svg
-```
-
-### Quiet mode
-
-```bash
-svgm icon.svg --quiet
+svgm icon.svg                    # Optimize in place
+svgm icon.svg -o icon.min.svg    # Output to a different file
+svgm icon.svg --stdout           # Print to stdout
+svgm icon.svg --dry-run          # Preview without writing
+svgm icons/*.svg                 # Multiple files
+svgm icon.svg --quiet            # Suppress output
 ```
 
 ## Benchmarks
 
-Tested on 17 real SVG logos (Figma/Illustrator exports). Same files, same machine.
+17 real SVG logos (Figma/Illustrator exports). Same files, same machine.
 
 | | **svgm** | **SVGO** |
 |:--|:--|:--|
 | **Compression** | 38.4% | 46.9% |
-| **Time** | 941ms | 2,174ms |
+| **Total time** | 941ms | 2,174ms |
 | **Speed** | **2.3x faster** | baseline |
-| **Runs needed** | **1** | 1-3 |
-| **Binary size** | 1.3 MB | Node.js runtime |
+| **Runs to converge** | **1** | 1-3 |
 
 <details>
-<summary><b>Full per-file results</b></summary>
+<summary><b>Per-file breakdown</b></summary>
 
 ```
 FILE                          SVGM         SVGO
@@ -148,7 +115,7 @@ xcode.svg                    36.7%        43.8%
 
 </details>
 
-svgm is closing the compression gap while staying significantly faster and running as a single native binary with zero dependencies.
+svgm is approaching SVGO-class compression while running as a single native binary at over twice the speed. Additional compression passes are actively being developed.
 
 ## How it works
 
@@ -165,11 +132,9 @@ SVG string ---------> AST tree ---------> AST tree -----------> SVG string
 2. **Optimize** — Run all passes in a loop until no pass reports a change (max 10 iterations)
 3. **Serialize** — Write the AST back as a minified SVG string
 
-The key insight: **passes operate on the in-memory AST, not strings.** SVGO re-parses from string between each multipass iteration. svgm mutates the tree directly, which is why it converges faster and uses less memory.
+Passes operate directly on the in-memory AST rather than re-serializing and re-parsing between iterations. This is what makes fixed-point convergence practical.
 
 ### Optimization passes
-
-16 passes across 4 categories:
 
 **Removal** — strip dead weight
 - Comments, doctypes, XML processing instructions
@@ -193,11 +158,11 @@ The key insight: **passes operate on the in-memory AST, not strings.** SVGO re-p
 - Implicit command repetition
 - Minimal separator insertion
 
-### Safety model
+### Safety
 
 svgm is conservative by default:
 
-- `<desc>` and `<title>` are **preserved** (accessibility semantics) unless you opt in
+- `<desc>` and `<title>` are **preserved** (accessibility semantics)
 - `<symbol>` and `<defs>` with `id` attributes are **never removed** (may be referenced)
 - Animation elements (`<animate>`, `<animateTransform>`, etc.) are **fully preserved**
 - `<foreignObject>` content is **never touched**
@@ -242,7 +207,7 @@ svgm is early-stage and contributions are welcome.
 ```bash
 git clone https://github.com/builtbyfrmwrk/svgm.git
 cd svgm
-cargo test --workspace    # 68 tests
+cargo test --workspace
 cargo clippy --workspace  # must pass clean
 ```
 
