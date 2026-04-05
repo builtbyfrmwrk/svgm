@@ -35,7 +35,7 @@
 
 SVG files exported from tools like Figma, Illustrator, and Inkscape often include metadata, redundant attributes, unnecessary wrapper structure, and verbose path data.
 
-[SVGO](https://github.com/svg/svgo) has been the standard SVG optimizer for years. svgm takes a different approach: a native Rust optimizer designed around fixed-point convergence, safe defaults, and a modern CLI. Like [oxlint](https://oxc.rs) is to ESLint — same problem, different architecture.
+[SVGO](https://github.com/svg/svgo) has been the standard SVG optimizer for years. svgm takes a different approach: a native Rust optimizer designed around fixed-point convergence, safe defaults, and a modern CLI. Similar to what [oxlint](https://oxc.rs) is to ESLint, svgm targets the same problem with a different architecture.
 
 ### Fixed-point convergence
 
@@ -70,13 +70,15 @@ cargo build --release
 ## Usage
 
 ```bash
-svgm icon.svg                    # Optimize in place
-svgm icon.svg -o icon.min.svg    # Output to a different file
-svgm icon.svg --stdout           # Print to stdout
-svgm icon.svg --dry-run          # Preview without writing
-svgm icons/*.svg                 # Multiple files
-svgm icon.svg --quiet            # Suppress output
+svgm icon.svg                    # Optimize in place (overwrites the file)
+svgm icon.svg -o icon.min.svg    # Write to a different file
+svgm icon.svg --stdout           # Print to stdout instead of overwriting
+svgm icon.svg --dry-run          # Preview size reduction without writing
+svgm icons/*.svg                 # Optimize multiple files in place
+svgm icon.svg --quiet            # Suppress all output except errors
 ```
+
+When piped (e.g. `svgm icon.svg | gzip`), output goes to stdout automatically.
 
 ## Benchmarks
 
@@ -87,7 +89,7 @@ svgm icon.svg --quiet            # Suppress output
 | **Compression** | 38.4% | 46.9% |
 | **Total time** | 941ms | 2,174ms |
 | **Speed** | **2.3x faster** | baseline |
-| **Runs to converge** | **1** | 1-3 |
+| **Invocations to converge** | **1** | 1-3 |
 
 <details>
 <summary><b>Per-file breakdown</b></summary>
@@ -115,7 +117,7 @@ xcode.svg                    36.7%        43.8%
 
 </details>
 
-svgm is closing the compression gap while staying significantly faster and shipping as a single native binary. Additional passes are actively being developed.
+svgm is closing the compression gap while staying significantly faster and shipping as a single native binary. Path, transform, and CSS optimizations are still expanding.
 
 ## How it works
 
@@ -132,7 +134,7 @@ SVG string ---------> AST tree ---------> AST tree -----------> SVG string
 2. **Optimize** — Run all passes in a loop until no pass reports a change (max 10 iterations)
 3. **Serialize** — Write the AST back as a minified SVG string
 
-Passes operate directly on the in-memory AST rather than re-serializing and re-parsing between iterations.
+Passes operate directly on the in-memory AST, avoiding repeated serialize/parse cycles between iterations.
 
 ### Optimization passes
 
@@ -202,7 +204,7 @@ svgm/
 
 ## Contributing
 
-svgm is early-stage and contributions are welcome.
+svgm is early, but already usable. Contributions and real-world SVG edge cases are especially helpful.
 
 ```bash
 git clone https://github.com/builtbyfrmwrk/svgm.git
