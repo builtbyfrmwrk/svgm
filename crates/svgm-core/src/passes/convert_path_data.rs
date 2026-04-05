@@ -45,9 +45,9 @@ impl Pass for ConvertPathData {
 
 /// A parsed path command with its coordinates.
 #[derive(Debug, Clone)]
-struct PathCmd {
-    cmd: char,
-    args: Vec<f64>,
+pub(crate) struct PathCmd {
+    pub(crate) cmd: char,
+    pub(crate) args: Vec<f64>,
 }
 
 /// Optimize a path `d` attribute string.
@@ -555,7 +555,7 @@ fn remove_redundant(commands: Vec<PathCmd>, precision: u32) -> Vec<PathCmd> {
 }
 
 /// Parse a path `d` string into a list of commands.
-fn parse_path(d: &str) -> Option<Vec<PathCmd>> {
+pub(crate) fn parse_path(d: &str) -> Option<Vec<PathCmd>> {
     let mut commands = Vec::new();
     let mut chars = d.chars().peekable();
     let mut current_cmd: Option<char> = None;
@@ -918,7 +918,7 @@ fn abs_to_rel(commands: Vec<PathCmd>) -> Vec<PathCmd> {
 }
 
 /// Serialize path commands into an optimized string.
-fn serialize_path(commands: &[PathCmd], precision: u32) -> String {
+pub(crate) fn serialize_path(commands: &[PathCmd], precision: u32) -> String {
     let mut out = String::new();
     let mut prev_cmd: Option<char> = None;
 

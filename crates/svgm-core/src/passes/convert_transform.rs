@@ -1,5 +1,6 @@
+use super::convert_path_data::{parse_path, serialize_path};
 use super::{Pass, PassResult};
-use crate::ast::{Document, NodeKind};
+use crate::ast::{Document, NodeId, NodeKind};
 
 pub struct ConvertTransform {
     pub precision: u32,
@@ -42,12 +43,34 @@ impl Pass for ConvertTransform {
                 }
 
                 // Try to apply pure translate directly to element coordinates
-                if let Some((tx, ty)) = matrix.as_translate(self.precision)
-                    && apply_translate_to_element(elem, tx, ty, self.precision)
-                {
-                    elem.attributes.remove(pos);
-                    changed = true;
-                    continue;
+                if let Some((tx, ty)) = matrix.as_translate(self.precision) {
+                    if apply_translate_to_element(elem, tx, ty, self.precision) {
+                        elem.attributes.remove(pos);
+                        changed = true;
+                        continue;
+                    }
+
+                    // Try to apply translate to path d attribute
+                    if elem.name == "path" {
+                        let d_value = elem
+                            .attributes
+                            .iter()
+                            .find(|a| a.name == "d" && a.prefix.is_none())
+                            .map(|a| a.value.clone());
+                        if let Some(d_val) = d_value
+                            && let Some(new_d) =
+                                apply_translate_to_path(&d_val, tx, ty, self.precision)
+                        {
+                            elem.attributes
+                                .iter_mut()
+                                .find(|a| a.name == "d" && a.prefix.is_none())
+                                .unwrap()
+                                .value = new_d;
+                            elem.attributes.remove(pos);
+                            changed = true;
+                            continue;
+                        }
+                    }
                 }
 
                 // Simplify the transform string
@@ -59,12 +82,164 @@ impl Pass for ConvertTransform {
             }
         }
 
+        // Phase 3: Push transforms from single-child groups to child
+        changed |= self.push_transforms_down(doc);
+
         if changed {
             PassResult::Changed
         } else {
             PassResult::Unchanged
         }
     }
+}
+
+/// Attributes with group-level semantics that should prevent transform push-down.
+const GROUP_ONLY_ATTRS: &[&str] = &["clip-path", "mask", "filter"];
+
+impl ConvertTransform {
+    /// Push transforms from single-child groups down to the child element.
+    fn push_transforms_down(&self, doc: &mut Document) -> bool {
+        let mut changed = false;
+        let ids = doc.traverse();
+
+        for id in ids {
+            // Check: is this a <g> with a transform and exactly one element child?
+            let child_id = {
+                let node = doc.node(id);
+                let NodeKind::Element(ref elem) = node.kind else {
+                    continue;
+                };
+                if elem.name != "g" {
+                    continue;
+                }
+                let has_transform = elem
+                    .attributes
+                    .iter()
+                    .any(|a| a.name == "transform" && a.prefix.is_none());
+                if !has_transform {
+                    continue;
+                }
+                // Skip groups with group-level semantic attrs
+                let has_group_only = elem
+                    .attributes
+                    .iter()
+                    .any(|a| GROUP_ONLY_ATTRS.contains(&a.name.as_str()));
+                if has_group_only {
+                    continue;
+                }
+                let children: Vec<NodeId> = doc.children(id).collect();
+                if children.len() != 1 {
+                    continue;
+                }
+                let child = doc.node(children[0]);
+                if matches!(child.kind, NodeKind::Element(_)) {
+                    children[0]
+                } else {
+                    continue;
+                }
+            };
+
+            // Get group transform matrix
+            let group_tf_str = {
+                let NodeKind::Element(ref elem) = doc.node(id).kind else {
+                    continue;
+                };
+                match elem
+                    .attributes
+                    .iter()
+                    .find(|a| a.name == "transform" && a.prefix.is_none())
+                {
+                    Some(a) => a.value.clone(),
+                    None => continue,
+                }
+            };
+            let Some(group_matrix) = parse_and_merge_transforms(&group_tf_str) else {
+                continue;
+            };
+
+            // Get child transform matrix (identity if none)
+            let child_matrix = {
+                let NodeKind::Element(ref child_elem) = doc.node(child_id).kind else {
+                    continue;
+                };
+                child_elem
+                    .attributes
+                    .iter()
+                    .find(|a| a.name == "transform" && a.prefix.is_none())
+                    .and_then(|a| parse_and_merge_transforms(&a.value))
+                    .unwrap_or_else(Matrix::identity)
+            };
+
+            // Compose and set on child
+            let composed = group_matrix.multiply(&child_matrix);
+            let composed_str = composed.serialize(self.precision);
+
+            if let NodeKind::Element(ref mut child_elem) = doc.node_mut(child_id).kind {
+                if let Some(attr) = child_elem
+                    .attributes
+                    .iter_mut()
+                    .find(|a| a.name == "transform" && a.prefix.is_none())
+                {
+                    attr.value = composed_str;
+                } else {
+                    child_elem.attributes.push(crate::ast::Attribute {
+                        prefix: None,
+                        name: "transform".to_string(),
+                        value: composed_str,
+                    });
+                }
+            }
+
+            // Remove transform from group
+            if let NodeKind::Element(ref mut elem) = doc.node_mut(id).kind {
+                elem.attributes
+                    .retain(|a| !(a.name == "transform" && a.prefix.is_none()));
+            }
+
+            changed = true;
+        }
+
+        changed
+    }
+}
+
+/// Apply a pure translate to path d attribute coordinates.
+fn apply_translate_to_path(d: &str, tx: f64, ty: f64, precision: u32) -> Option<String> {
+    let mut commands = parse_path(d)?;
+    for cmd in &mut commands {
+        match cmd.cmd {
+            'M' | 'L' | 'T' => {
+                cmd.args[0] += tx;
+                cmd.args[1] += ty;
+            }
+            'C' => {
+                for i in (0..6).step_by(2) {
+                    cmd.args[i] += tx;
+                    cmd.args[i + 1] += ty;
+                }
+            }
+            'S' | 'Q' => {
+                for i in (0..4).step_by(2) {
+                    cmd.args[i] += tx;
+                    cmd.args[i + 1] += ty;
+                }
+            }
+            'H' => {
+                cmd.args[0] += tx;
+            }
+            'V' => {
+                cmd.args[0] += ty;
+            }
+            'A' => {
+                // Only translate the endpoint; radii, rotation, flags unchanged
+                cmd.args[5] += tx;
+                cmd.args[6] += ty;
+            }
+            // Relative commands and Z: unchanged
+            _ => {}
+        }
+    }
+    Some(serialize_path(&commands, precision))
 }
 
 /// 2D affine transformation matrix: [a c e; b d f; 0 0 1]
@@ -651,15 +826,49 @@ mod tests {
     }
 
     #[test]
-    fn skips_path_for_translate_application() {
+    fn applies_translate_to_path() {
         let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><path transform="translate(10,20)" d="M0 0L10 10"/></svg>"#;
+        let mut doc = parse(input).unwrap();
+        assert_eq!(
+            ConvertTransform::default().run(&mut doc),
+            PassResult::Changed
+        );
+        let output = serialize(&doc);
+        assert!(
+            !output.contains("transform"),
+            "translate should be applied to path d: {output}"
+        );
+    }
+
+    #[test]
+    fn applies_translate_to_path_with_arc() {
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><path transform="translate(10,20)" d="M0 0A25 25 0 0 1 50 50"/></svg>"#;
+        let mut doc = parse(input).unwrap();
+        assert_eq!(
+            ConvertTransform::default().run(&mut doc),
+            PassResult::Changed
+        );
+        let output = serialize(&doc);
+        assert!(
+            !output.contains("transform"),
+            "translate should be applied to arc path: {output}"
+        );
+        // Arc radii should be unchanged (25 25)
+        assert!(
+            output.contains("25 25") || output.contains("25,25"),
+            "arc radii should be unchanged: {output}"
+        );
+    }
+
+    #[test]
+    fn preserves_non_translate_on_path() {
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><path transform="rotate(45)" d="M0 0L10 10"/></svg>"#;
         let mut doc = parse(input).unwrap();
         ConvertTransform::default().run(&mut doc);
         let output = serialize(&doc);
-        // Path transform should be simplified but not applied to coordinates
         assert!(
-            output.contains("translate(10,20)") || output.contains("transform"),
-            "path translate should be kept (not applied to d): {output}"
+            output.contains("transform"),
+            "rotate should not be applied to path d: {output}"
         );
     }
 
@@ -674,6 +883,107 @@ mod tests {
         assert!(
             output.contains("matrix("),
             "mixed transforms should become matrix: {output}"
+        );
+    }
+
+    // ── Phase 3: Transform push-down tests ─────────────────────────────
+
+    #[test]
+    fn pushes_transform_to_single_child() {
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10,20)"><rect width="50" height="50"/></g></svg>"#;
+        let mut doc = parse(input).unwrap();
+        assert_eq!(
+            ConvertTransform::default().run(&mut doc),
+            PassResult::Changed
+        );
+        let output = serialize(&doc);
+        // Phase 3 pushes transform to child; group no longer has transform
+        // (collapse_groups would remove the <g> on next pass, and translate
+        // would be applied to rect coords on the next optimizer iteration)
+        assert!(
+            !output.contains("<g transform") && output.contains("translate(10,20)"),
+            "group should lose transform, child should gain it: {output}"
+        );
+    }
+
+    #[test]
+    fn composes_group_and_child_transforms() {
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10,20)"><rect transform="translate(5,5)" width="50" height="50"/></g></svg>"#;
+        let mut doc = parse(input).unwrap();
+        assert_eq!(
+            ConvertTransform::default().run(&mut doc),
+            PassResult::Changed
+        );
+        let output = serialize(&doc);
+        // Group translate(10,20) + child translate(5,5) = translate(15,25) on child
+        // The child's translate(5,5) was applied to coords in the first traversal (x=5,y=5),
+        // then Phase 3 composes the group's translate into the child.
+        assert!(
+            !output.contains("<g transform"),
+            "group should lose transform: {output}"
+        );
+        assert!(
+            output.contains("translate(10,20)") || output.contains("translate(15,25)"),
+            "child should have composed or group transform: {output}"
+        );
+    }
+
+    #[test]
+    fn skips_multi_child_group_pushdown() {
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10,20)"><rect/><circle r="5"/></g></svg>"#;
+        let mut doc = parse(input).unwrap();
+        ConvertTransform::default().run(&mut doc);
+        let output = serialize(&doc);
+        assert!(
+            output.contains("<g") && output.contains("translate(10,20)"),
+            "multi-child group should keep transform: {output}"
+        );
+    }
+
+    #[test]
+    fn skips_pushdown_with_clip_path() {
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10,20)" clip-path="url(#c)"><rect/></g></svg>"#;
+        let mut doc = parse(input).unwrap();
+        ConvertTransform::default().run(&mut doc);
+        let output = serialize(&doc);
+        assert!(
+            output.contains("clip-path") && output.contains("translate(10,20)"),
+            "group with clip-path should not push transform: {output}"
+        );
+    }
+
+    #[test]
+    fn pushes_transform_to_path_child() {
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10,20)"><path d="M0 0L50 50"/></g></svg>"#;
+        let mut doc = parse(input).unwrap();
+        ConvertTransform::default().run(&mut doc);
+        let output = serialize(&doc);
+        // Phase 3 pushes transform to path child; group no longer has it
+        assert!(
+            !output.contains("<g transform"),
+            "group should lose transform: {output}"
+        );
+        // Path now has the translate (will be applied to d on next iteration)
+        assert!(
+            output.contains("translate(10,20)"),
+            "path should have the pushed transform: {output}"
+        );
+    }
+
+    #[test]
+    fn full_optimize_applies_pushed_transform() {
+        // End-to-end: group transform → push to path → apply to d → collapse group
+        let input = r#"<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(10,20)"><path d="M0 0L50 50"/></g></svg>"#;
+        let result = crate::optimize(input).unwrap();
+        assert!(
+            !result.data.contains("transform"),
+            "full optimize should apply transform to path: {}",
+            result.data
+        );
+        assert!(
+            !result.data.contains("<g"),
+            "full optimize should collapse group: {}",
+            result.data
         );
     }
 }
