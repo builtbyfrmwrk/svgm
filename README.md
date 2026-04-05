@@ -2,9 +2,9 @@
   <br>
   <a href="https://github.com/madebyfrmwrk/svgm">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/svgm-light.svg">
-      <source media="(prefers-color-scheme: light)" srcset="assets/svgm-dark.svg">
-      <img alt="svgm" src="assets/svgm-dark.svg" height="42">
+      <source media="(prefers-color-scheme: dark)" srcset="assets/svgm-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="assets/svgm-light.svg">
+      <img alt="svgm" src="assets/svgm-light.svg" height="42">
     </picture>
   </a>
   <br>
@@ -117,7 +117,7 @@ xcode.svg                    36.7%        43.8%
 
 </details>
 
-svgm is closing the compression gap while staying significantly faster and shipping as a single native binary. Path, transform, and CSS optimizations are still being developed.
+svgm is closing the compression gap while staying significantly faster and shipping as a single native binary. Path and transform optimizations are complete; shape-to-path, path merging, and CSS optimizations are still being developed.
 
 ## How it works
 
@@ -157,7 +157,8 @@ Passes operate directly on the in-memory AST, avoiding repeated serialize/parse 
 **Transform** — simplify and apply transforms
 - Merge consecutive transforms into a single equivalent (`translate(10,20) translate(5,5)` -> `translate(15,25)`)
 - Remove identity transforms (`scale(1)`, `translate(0,0)`, `rotate(0)`)
-- Apply pure translates directly to element coordinates (rect, circle, ellipse, line, text)
+- Apply pure translates directly to element coordinates and path data
+- Push transforms from single-child groups to child, enabling group collapse
 
 **Geometry** — compress path data
 - Absolute-to-relative coordinate conversion where shorter
@@ -202,10 +203,10 @@ svgm/
 
 ## Roadmap
 
-- [x] Transform merging and simplification (Phase 1 + partial Phase 2)
-- [ ] Transform application to path coordinates and push-down from groups
+- [x] Transform merging, application, and push-down (all 3 phases)
+- [ ] Shape-to-path conversion (rect, circle, ellipse → shorter `<path>`)
 - [ ] Path merging (adjacent paths with identical attributes)
-- [ ] Shape-to-path conversion
+- [ ] ID cleanup (remove unused, shorten used)
 - [ ] CSS `<style>` minification
 - [ ] Recursive directory processing (`-r`)
 - [ ] WASM build for browser usage
