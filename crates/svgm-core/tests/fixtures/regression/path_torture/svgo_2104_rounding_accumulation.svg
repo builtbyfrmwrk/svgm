@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <!-- SVGO #2104: accumulated rounding errors on long paths with many small increments -->
+  <path d="M0 0L0.4 0.4L0.8 0.8L1.2 1.2L1.6 1.6L2.0 2.0L2.4 2.4L2.8 2.8L3.2 3.2L3.6 3.6L4.0 4.0"/>
+  <path d="M0 0L0.333 0.333L0.667 0.667L1.0 1.0L1.333 1.333L1.667 1.667L2.0 2.0"/>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Cubic where control points equal endpoints (degenerate to line) -->
+  <path d="M10 10C10 10 20 20 20 20"/>
+  <!-- Quadratic with coincident control point -->
+  <path d="M10 10Q10 10 20 20"/>
+  <!-- Smooth cubic degenerate -->
+  <path d="M10 10S10 10 20 20"/>
+  <!-- Zero-length curve -->
+  <path d="M10 10C10 10 10 10 10 10"/>
+</svg>

@@ -135,6 +135,62 @@ fn regression_foreign_object() {
     assert!(output.contains("Hello world"));
 }
 
+// ── Path torture fixtures ───────────────────────────────────────────────
+
+#[test]
+fn path_torture_fixtures() {
+    let fixture_dir = Path::new("tests/fixtures/regression/path_torture");
+    assert!(fixture_dir.exists(), "path_torture fixture directory missing");
+    let mut count = 0;
+    for entry in fs::read_dir(fixture_dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().map_or(false, |e| e == "svg") {
+            let name = path.file_name().unwrap().to_str().unwrap().to_string();
+            let (output, _input_size, _output_size) = optimize_file(&path);
+
+            // Valid SVG
+            assert_valid_svg(&output, &name);
+
+            // Convergence: optimizing twice should be byte-identical
+            let result2 = svgm_core::optimize(&output).unwrap();
+            assert_eq!(
+                output, result2.data,
+                "{name}: not converged after second optimization"
+            );
+
+            // Re-parseable
+            svgm_core::parser::parse(&output)
+                .unwrap_or_else(|e| panic!("{name}: optimized output not parseable: {e}"));
+
+            count += 1;
+        }
+    }
+    assert!(count >= 15, "expected at least 15 path torture fixtures, found {count}");
+}
+
+#[test]
+fn path_torture_structural_equivalence() {
+    let fixture_dir = Path::new("tests/fixtures/regression/path_torture");
+    assert!(fixture_dir.exists(), "path_torture fixture directory missing");
+    for entry in fs::read_dir(fixture_dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().map_or(false, |e| e == "svg") {
+            let name = path.file_name().unwrap().to_str().unwrap().to_string();
+            let input = fs::read_to_string(&path).unwrap();
+            let output = svgm_core::optimize(&input).unwrap().data;
+
+            // Path count should not change (safety invariant for convertPathData;
+            // later passes like mergePaths may intentionally change path count)
+            let input_paths = input.matches("<path").count();
+            let output_paths = output.matches("<path").count();
+            assert_eq!(
+                input_paths, output_paths,
+                "{name}: path count changed from {input_paths} to {output_paths}"
+            );
+        }
+    }
+}
+
 // ── Real editor exports ─────────────────────────────────────────────────
 
 #[test]

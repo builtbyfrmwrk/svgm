@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- SVGO #2093: rectangular clip path that gets artifacts from aggressive rounding -->
+  <defs>
+    <clipPath id="clip1">
+      <path d="M0 0H100V100H0Z"/>
+    </clipPath>
+  </defs>
+  <rect x="0" y="0" width="200" height="200" clip-path="url(#clip1)"/>
+  <!-- Precise clip boundary -->
+  <path d="M10.005 20.005H90.005V80.005H10.005Z"/>
+</svg>

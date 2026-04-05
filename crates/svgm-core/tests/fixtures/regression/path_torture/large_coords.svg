@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100000 100000">
+  <!-- Very large to origin -->
+  <path d="M99999 99999L0 0"/>
+  <!-- Large negative to large positive -->
+  <path d="M-99999 -99999L99999 99999"/>
+  <!-- Large with decimals -->
+  <path d="M99999.999 99999.999L0.001 0.001"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Many repeated L commands -->
+  <path d="M0 0L1 1L2 2L3 3L4 4L5 5L6 6L7 7L8 8L9 9"/>
+  <!-- Many repeated C commands -->
+  <path d="M0 0C1 1 2 2 3 3C4 4 5 5 6 6C7 7 8 8 9 9"/>
+  <!-- Simple rectangle with implicit repeat -->
+  <path d="M0 0L10 0L10 10L0 10Z"/>
+</svg>

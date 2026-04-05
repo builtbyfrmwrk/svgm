@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
+  <!-- Alternating relative/absolute line-to -->
+  <path d="M10 10l5 5L100 100l-3-3L200 200"/>
+  <!-- Relative start, absolute cubic, mixed smooth -->
+  <path d="m5 5c1 1 2 2 3 3C50 50 60 60 70 70s5 5 10 10S100 100 110 110"/>
+</svg>

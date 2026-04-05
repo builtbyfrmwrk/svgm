@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+  <!-- SVGO #1858: floating-point errors with irrational-ish numbers -->
+  <path d="M7.0711 7.0711L14.1421 0L21.2132 7.0711"/>
+  <path d="M0 0L3.1416 3.1416L6.2832 0L9.4248 3.1416"/>
+  <path d="M1.4142 1.7321L2.2361 2.4495L3.1623 3.3166"/>
+</svg>

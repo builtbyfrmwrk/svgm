@@ -22,16 +22,13 @@ impl Pass for ConvertPathData {
 
         for id in ids {
             let node = doc.node_mut(id);
-            if let NodeKind::Element(ref mut elem) = node.kind {
-                if let Some(d_attr) = elem.attributes.iter_mut().find(|a| a.name == "d" && a.prefix.is_none()) {
-                    if let Some(optimized) = optimize_path(&d_attr.value, self.precision) {
-                        if optimized.len() < d_attr.value.len() {
+            if let NodeKind::Element(ref mut elem) = node.kind
+                && let Some(d_attr) = elem.attributes.iter_mut().find(|a| a.name == "d" && a.prefix.is_none())
+                    && let Some(optimized) = optimize_path(&d_attr.value, self.precision)
+                        && optimized.len() < d_attr.value.len() {
                             d_attr.value = optimized;
                             changed = true;
                         }
-                    }
-                }
-            }
         }
 
         if changed { PassResult::Changed } else { PassResult::Unchanged }
@@ -52,12 +49,428 @@ fn optimize_path(d: &str, precision: u32) -> Option<String> {
         return None;
     }
 
-    // Convert absolute commands to relative where shorter
+    // Phase 1: Normalize to absolute, expand S→C and T→Q for re-analysis
+    let commands = normalize_to_absolute(commands);
+
+    // Phase 2: Geometric simplifications
+    let commands = simplify_curves(commands, precision);
+    let commands = detect_shorthands(commands, precision);
+    let commands = remove_redundant(commands, precision);
+
+    // Phase 3: Pick shorter abs/rel per command
     let commands = abs_to_rel(commands);
 
     // Serialize with optimal formatting
     let result = serialize_path(&commands, precision);
     Some(result)
+}
+
+/// Check if two values are equal after rounding to the given precision.
+fn approx_eq(a: f64, b: f64, precision: u32) -> bool {
+    let factor = 10f64.powi(precision as i32);
+    (a * factor).round() == (b * factor).round()
+}
+
+/// Convert all commands to absolute and expand S→C, T→Q shorthands.
+/// This gives a clean baseline for geometric analysis.
+fn normalize_to_absolute(commands: Vec<PathCmd>) -> Vec<PathCmd> {
+    let mut result = Vec::with_capacity(commands.len());
+    let mut cx: f64 = 0.0;
+    let mut cy: f64 = 0.0;
+    let mut sx: f64 = 0.0;
+    let mut sy: f64 = 0.0;
+    // Last control point for cubic (used by S/s expansion)
+    let mut last_cubic_cp: Option<(f64, f64)> = None;
+    // Last control point for quadratic (used by T/t expansion)
+    let mut last_quad_cp: Option<(f64, f64)> = None;
+
+    for cmd in commands {
+        match cmd.cmd {
+            'M' => {
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                sx = cx;
+                sy = cy;
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(cmd);
+            }
+            'm' => {
+                cx += cmd.args[0];
+                cy += cmd.args[1];
+                sx = cx;
+                sy = cy;
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(PathCmd { cmd: 'M', args: vec![cx, cy] });
+            }
+            'L' => {
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(cmd);
+            }
+            'l' => {
+                cx += cmd.args[0];
+                cy += cmd.args[1];
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(PathCmd { cmd: 'L', args: vec![cx, cy] });
+            }
+            'H' => {
+                cx = cmd.args[0];
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(PathCmd { cmd: 'L', args: vec![cx, cy] });
+            }
+            'h' => {
+                cx += cmd.args[0];
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(PathCmd { cmd: 'L', args: vec![cx, cy] });
+            }
+            'V' => {
+                cy = cmd.args[0];
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(PathCmd { cmd: 'L', args: vec![cx, cy] });
+            }
+            'v' => {
+                cy += cmd.args[0];
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(PathCmd { cmd: 'L', args: vec![cx, cy] });
+            }
+            'C' => {
+                last_cubic_cp = Some((cmd.args[2], cmd.args[3]));
+                last_quad_cp = None;
+                cx = cmd.args[4];
+                cy = cmd.args[5];
+                result.push(cmd);
+            }
+            'c' => {
+                let abs = vec![
+                    cx + cmd.args[0], cy + cmd.args[1],
+                    cx + cmd.args[2], cy + cmd.args[3],
+                    cx + cmd.args[4], cy + cmd.args[5],
+                ];
+                last_cubic_cp = Some((abs[2], abs[3]));
+                last_quad_cp = None;
+                cx = abs[4];
+                cy = abs[5];
+                result.push(PathCmd { cmd: 'C', args: abs });
+            }
+            'S' => {
+                // Expand: first control point is reflection of last cubic cp
+                let cp1 = last_cubic_cp
+                    .map(|(cpx, cpy)| (2.0 * cx - cpx, 2.0 * cy - cpy))
+                    .unwrap_or((cx, cy));
+                let abs = vec![cp1.0, cp1.1, cmd.args[0], cmd.args[1], cmd.args[2], cmd.args[3]];
+                last_cubic_cp = Some((abs[2], abs[3]));
+                last_quad_cp = None;
+                cx = abs[4];
+                cy = abs[5];
+                result.push(PathCmd { cmd: 'C', args: abs });
+            }
+            's' => {
+                let cp1 = last_cubic_cp
+                    .map(|(cpx, cpy)| (2.0 * cx - cpx, 2.0 * cy - cpy))
+                    .unwrap_or((cx, cy));
+                let abs = vec![
+                    cp1.0, cp1.1,
+                    cx + cmd.args[0], cy + cmd.args[1],
+                    cx + cmd.args[2], cy + cmd.args[3],
+                ];
+                last_cubic_cp = Some((abs[2], abs[3]));
+                last_quad_cp = None;
+                cx = abs[4];
+                cy = abs[5];
+                result.push(PathCmd { cmd: 'C', args: abs });
+            }
+            'Q' => {
+                last_quad_cp = Some((cmd.args[0], cmd.args[1]));
+                last_cubic_cp = None;
+                cx = cmd.args[2];
+                cy = cmd.args[3];
+                result.push(cmd);
+            }
+            'q' => {
+                let abs = vec![
+                    cx + cmd.args[0], cy + cmd.args[1],
+                    cx + cmd.args[2], cy + cmd.args[3],
+                ];
+                last_quad_cp = Some((abs[0], abs[1]));
+                last_cubic_cp = None;
+                cx = abs[2];
+                cy = abs[3];
+                result.push(PathCmd { cmd: 'Q', args: abs });
+            }
+            'T' => {
+                let cp = last_quad_cp
+                    .map(|(cpx, cpy)| (2.0 * cx - cpx, 2.0 * cy - cpy))
+                    .unwrap_or((cx, cy));
+                last_quad_cp = Some(cp);
+                last_cubic_cp = None;
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                result.push(PathCmd { cmd: 'Q', args: vec![cp.0, cp.1, cx, cy] });
+            }
+            't' => {
+                let cp = last_quad_cp
+                    .map(|(cpx, cpy)| (2.0 * cx - cpx, 2.0 * cy - cpy))
+                    .unwrap_or((cx, cy));
+                last_quad_cp = Some(cp);
+                last_cubic_cp = None;
+                cx += cmd.args[0];
+                cy += cmd.args[1];
+                result.push(PathCmd { cmd: 'Q', args: vec![cp.0, cp.1, cx, cy] });
+            }
+            'A' => {
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                cx = cmd.args[5];
+                cy = cmd.args[6];
+                result.push(cmd);
+            }
+            'a' => {
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                let abs = vec![
+                    cmd.args[0], cmd.args[1], cmd.args[2],
+                    cmd.args[3], cmd.args[4],
+                    cx + cmd.args[5], cy + cmd.args[6],
+                ];
+                cx = abs[5];
+                cy = abs[6];
+                result.push(PathCmd { cmd: 'A', args: abs });
+            }
+            'Z' | 'z' => {
+                cx = sx;
+                cy = sy;
+                last_cubic_cp = None;
+                last_quad_cp = None;
+                result.push(PathCmd { cmd: 'Z', args: vec![] });
+            }
+            _ => {
+                result.push(cmd);
+            }
+        }
+    }
+    result
+}
+
+/// Convert degenerate curves to lines where control points are collinear with endpoints.
+fn simplify_curves(commands: Vec<PathCmd>, precision: u32) -> Vec<PathCmd> {
+    let mut result = Vec::with_capacity(commands.len());
+    let mut cx: f64 = 0.0;
+    let mut cy: f64 = 0.0;
+
+    for cmd in commands {
+        match cmd.cmd {
+            'C' => {
+                let (x1, y1) = (cmd.args[0], cmd.args[1]);
+                let (x2, y2) = (cmd.args[2], cmd.args[3]);
+                let (x, y) = (cmd.args[4], cmd.args[5]);
+                // Check if all control points are collinear with the line from (cx,cy) to (x,y)
+                if is_collinear(cx, cy, x1, y1, x, y, precision)
+                    && is_collinear(cx, cy, x2, y2, x, y, precision)
+                {
+                    result.push(PathCmd { cmd: 'L', args: vec![x, y] });
+                } else {
+                    result.push(cmd);
+                }
+                cx = x;
+                cy = y;
+            }
+            'Q' => {
+                let (cpx, cpy) = (cmd.args[0], cmd.args[1]);
+                let (x, y) = (cmd.args[2], cmd.args[3]);
+                if is_collinear(cx, cy, cpx, cpy, x, y, precision) {
+                    result.push(PathCmd { cmd: 'L', args: vec![x, y] });
+                } else {
+                    result.push(cmd);
+                }
+                cx = x;
+                cy = y;
+            }
+            'M' => {
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                result.push(cmd);
+            }
+            'L' => {
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                result.push(cmd);
+            }
+            'A' => {
+                cx = cmd.args[5];
+                cy = cmd.args[6];
+                result.push(cmd);
+            }
+            'Z' => {
+                // Z doesn't change cx/cy tracking for simplify purposes
+                // (subpath start is tracked separately in abs_to_rel)
+                result.push(cmd);
+            }
+            _ => {
+                result.push(cmd);
+            }
+        }
+    }
+    result
+}
+
+/// Check if point (px, py) is collinear with the line from (x0, y0) to (x1, y1).
+fn is_collinear(x0: f64, y0: f64, px: f64, py: f64, x1: f64, y1: f64, precision: u32) -> bool {
+    // Cross product of vectors (x1-x0, y1-y0) and (px-x0, py-y0)
+    let cross = (x1 - x0) * (py - y0) - (y1 - y0) * (px - x0);
+    let tolerance = 0.5 / 10f64.powi(precision as i32);
+    cross.abs() < tolerance
+}
+
+/// Detect consecutive cubics/quadratics that can use shorthand S/T notation.
+fn detect_shorthands(commands: Vec<PathCmd>, precision: u32) -> Vec<PathCmd> {
+    let mut result = Vec::with_capacity(commands.len());
+    let mut cx: f64 = 0.0;
+    let mut cy: f64 = 0.0;
+    let mut last_cubic_cp2: Option<(f64, f64)> = None;
+    let mut last_quad_cp: Option<(f64, f64)> = None;
+
+    for cmd in commands {
+        match cmd.cmd {
+            'C' => {
+                let (x1, y1) = (cmd.args[0], cmd.args[1]);
+                let (x2, y2) = (cmd.args[2], cmd.args[3]);
+                let (x, y) = (cmd.args[4], cmd.args[5]);
+
+                // Check if first control point matches the reflection of previous cubic cp2
+                if let Some((prev_cp2x, prev_cp2y)) = last_cubic_cp2 {
+                    let reflected_x = 2.0 * cx - prev_cp2x;
+                    let reflected_y = 2.0 * cy - prev_cp2y;
+                    if approx_eq(x1, reflected_x, precision)
+                        && approx_eq(y1, reflected_y, precision)
+                    {
+                        result.push(PathCmd { cmd: 'S', args: vec![x2, y2, x, y] });
+                        last_cubic_cp2 = Some((x2, y2));
+                        last_quad_cp = None;
+                        cx = x;
+                        cy = y;
+                        continue;
+                    }
+                }
+
+                last_cubic_cp2 = Some((x2, y2));
+                last_quad_cp = None;
+                cx = x;
+                cy = y;
+                result.push(cmd);
+            }
+            'Q' => {
+                let (cpx, cpy) = (cmd.args[0], cmd.args[1]);
+                let (x, y) = (cmd.args[2], cmd.args[3]);
+
+                // Check if control point matches the reflection of previous quad cp
+                if let Some((prev_cpx, prev_cpy)) = last_quad_cp {
+                    let reflected_x = 2.0 * cx - prev_cpx;
+                    let reflected_y = 2.0 * cy - prev_cpy;
+                    if approx_eq(cpx, reflected_x, precision)
+                        && approx_eq(cpy, reflected_y, precision)
+                    {
+                        result.push(PathCmd { cmd: 'T', args: vec![x, y] });
+                        last_quad_cp = Some((cpx, cpy));
+                        last_cubic_cp2 = None;
+                        cx = x;
+                        cy = y;
+                        continue;
+                    }
+                }
+
+                last_quad_cp = Some((cpx, cpy));
+                last_cubic_cp2 = None;
+                cx = x;
+                cy = y;
+                result.push(cmd);
+            }
+            'M' => {
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                last_cubic_cp2 = None;
+                last_quad_cp = None;
+                result.push(cmd);
+            }
+            'L' => {
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                last_cubic_cp2 = None;
+                last_quad_cp = None;
+                result.push(cmd);
+            }
+            'A' => {
+                cx = cmd.args[5];
+                cy = cmd.args[6];
+                last_cubic_cp2 = None;
+                last_quad_cp = None;
+                result.push(cmd);
+            }
+            'Z' => {
+                last_cubic_cp2 = None;
+                last_quad_cp = None;
+                result.push(cmd);
+            }
+            _ => {
+                result.push(cmd);
+            }
+        }
+    }
+    result
+}
+
+/// Remove redundant commands: lines to same point, empty subpaths.
+fn remove_redundant(commands: Vec<PathCmd>, precision: u32) -> Vec<PathCmd> {
+    let mut result = Vec::with_capacity(commands.len());
+    let mut cx: f64 = 0.0;
+    let mut cy: f64 = 0.0;
+
+    for cmd in &commands {
+        match cmd.cmd {
+            'L' => {
+                let (x, y) = (cmd.args[0], cmd.args[1]);
+                // Skip line to same point
+                if approx_eq(x, cx, precision) && approx_eq(y, cy, precision) {
+                    continue;
+                }
+                cx = x;
+                cy = y;
+                result.push(cmd.clone());
+            }
+            'M' => {
+                cx = cmd.args[0];
+                cy = cmd.args[1];
+                result.push(cmd.clone());
+            }
+            'C' | 'S' | 'Q' | 'T' => {
+                let args = &cmd.args;
+                let (x, y) = (args[args.len() - 2], args[args.len() - 1]);
+                cx = x;
+                cy = y;
+                result.push(cmd.clone());
+            }
+            'A' => {
+                cx = cmd.args[5];
+                cy = cmd.args[6];
+                result.push(cmd.clone());
+            }
+            'Z' => {
+                result.push(cmd.clone());
+            }
+            _ => {
+                result.push(cmd.clone());
+            }
+        }
+    }
+    result
 }
 
 /// Parse a path `d` string into a list of commands.
@@ -75,15 +488,14 @@ fn parse_path(d: &str) -> Option<Vec<PathCmd>> {
         }
 
         // Check if next char is a command letter
-        if let Some(&c) = chars.peek() {
-            if is_command(c) {
+        if let Some(&c) = chars.peek()
+            && is_command(c) {
                 current_cmd = Some(c);
                 chars.next();
                 skip_ws_comma(&mut chars);
             }
-        }
 
-        let cmd = current_cmd?;
+        let mut cmd = current_cmd?;
         let arg_count = args_for_command(cmd);
 
         if arg_count == 0 {
@@ -103,24 +515,22 @@ fn parse_path(d: &str) -> Option<Vec<PathCmd>> {
             }
 
             // Check if next is a new command
-            if let Some(&c) = chars.peek() {
-                if is_command(c) {
+            if let Some(&c) = chars.peek()
+                && is_command(c) {
                     break;
                 }
-            }
 
             let mut args = Vec::with_capacity(arg_count);
             for i in 0..arg_count {
                 skip_ws_comma(&mut chars);
                 // For arc commands, args 3 and 4 are flags (0 or 1)
                 if (cmd == 'A' || cmd == 'a') && (i == 3 || i == 4) {
-                    if let Some(&c) = chars.peek() {
-                        if c == '0' || c == '1' {
+                    if let Some(&c) = chars.peek()
+                        && (c == '0' || c == '1') {
                             chars.next();
                             args.push(if c == '1' { 1.0 } else { 0.0 });
                             continue;
                         }
-                    }
                     return None; // invalid arc flag
                 }
                 if let Some(n) = parse_number(&mut chars) {
@@ -139,8 +549,10 @@ fn parse_path(d: &str) -> Option<Vec<PathCmd>> {
                 // Implicit repeat: M becomes L, m becomes l
                 if cmd == 'M' {
                     current_cmd = Some('L');
+                    cmd = 'L';
                 } else if cmd == 'm' {
                     current_cmd = Some('l');
+                    cmd = 'l';
                 }
             } else {
                 break;
@@ -402,11 +814,7 @@ fn serialize_path(commands: &[PathCmd], precision: u32) -> String {
             false
         } else if prev_cmd == Some('M') && c == 'L' {
             false
-        } else if prev_cmd == Some('m') && c == 'l' {
-            false
-        } else {
-            true
-        };
+        } else { !(prev_cmd == Some('m') && c == 'l') };
 
         if emit_cmd {
             // No space needed before Z
@@ -459,9 +867,13 @@ fn needs_separator_before(out: &str, next: &str) -> bool {
         return !last.is_ascii_digit() && last != b' ' && last != b',';
     }
     if first == b'.' {
-        // Dot can self-separate only if previous number has no dot
-        // For safety, add separator if last char is a digit
-        return false; // Allow .5 to follow directly
+        // .X can self-separate only when the preceding number already contains
+        // a decimal point (e.g. "1.5.4" → 1.5 and 0.4). If the preceding
+        // number has no dot, ".4" after "0" would be read as "0.4" (one number).
+        let has_prior_dot = out.bytes().rev()
+            .take_while(|&b| b.is_ascii_digit() || b == b'.')
+            .any(|b| b == b'.');
+        return !has_prior_dot;
     }
 
     // Otherwise need separator if last is digit and first is digit
@@ -527,12 +939,11 @@ fn parse_number(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<f64>
     let mut s = String::new();
 
     // Optional sign
-    if let Some(&c) = chars.peek() {
-        if c == '-' || c == '+' {
+    if let Some(&c) = chars.peek()
+        && (c == '-' || c == '+') {
             s.push(c);
             chars.next();
         }
-    }
 
     // Integer part
     let mut has_digits = false;
@@ -566,16 +977,15 @@ fn parse_number(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<f64>
     }
 
     // Exponent
-    if let Some(&c) = chars.peek() {
-        if c == 'e' || c == 'E' {
+    if let Some(&c) = chars.peek()
+        && (c == 'e' || c == 'E') {
             s.push(c);
             chars.next();
-            if let Some(&c) = chars.peek() {
-                if c == '+' || c == '-' {
+            if let Some(&c) = chars.peek()
+                && (c == '+' || c == '-') {
                     s.push(c);
                     chars.next();
                 }
-            }
             while let Some(&c) = chars.peek() {
                 if c.is_ascii_digit() {
                     s.push(c);
@@ -585,7 +995,6 @@ fn parse_number(chars: &mut std::iter::Peekable<std::str::Chars>) -> Option<f64>
                 }
             }
         }
-    }
 
     s.parse().ok()
 }
@@ -650,5 +1059,205 @@ mod tests {
         // Should not corrupt arc commands
         let reparsed = parse_path(&result);
         assert!(reparsed.is_some(), "optimized arc should be re-parseable: {result}");
+    }
+
+    // ── Path torture tests ─────────────────────────────────────────────
+
+    #[test]
+    fn roundtrip_preserves_command_structure() {
+        let paths = [
+            "M10 80A25 25 0 0 1 50 80",
+            "M0 0L10 0L10 10L0 10Z",
+            "M0 0C10 10 20 20 30 30S50 50 60 60",
+            "M0 0Q10 10 20 20T40 40",
+            "M10 10l5 5L100 100l-3-3",
+            "M150 0A150 150 0 1 0 150 300A150 150 0 1 0 150 0Z",
+            "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2",
+        ];
+        for d in paths {
+            let optimized = optimize_path(d, 3).unwrap();
+            let reparsed = parse_path(&optimized);
+            assert!(reparsed.is_some(), "failed to reparse optimized: {d} -> {optimized}");
+        }
+    }
+
+    #[test]
+    fn optimize_twice_produces_same_output() {
+        let paths = [
+            "M 100 200 L 300 400",
+            "M10 80A25 25 0 0 1 50 80",
+            "M239.248 207.643C233.892 207.643 229.713 205.607 226.714 201.536",
+            "M0.001 0.001L0.002 0.002",
+            "M99999 99999L0 0",
+            "M0 0L1 1L2 2L3 3L4 4L5 5",
+            "M150 0A150 150 0 1 0 150 300A150 150 0 1 0 150 0Z",
+            "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2",
+        ];
+        for d in paths {
+            let first = optimize_path(d, 3).unwrap();
+            let second = optimize_path(&first, 3).unwrap();
+            assert_eq!(first, second, "not converged for: {d}\n  first:  {first}\n  second: {second}");
+        }
+    }
+
+    #[test]
+    fn arc_flag_combinations_preserved() {
+        for large_arc in [0, 1] {
+            for sweep in [0, 1] {
+                let d = format!("M10 80A25 25 0 {large_arc} {sweep} 50 80");
+                let result = optimize_path(&d, 3).unwrap();
+                let cmds = parse_path(&result).unwrap();
+                let arc = cmds.iter().find(|c| c.cmd == 'a' || c.cmd == 'A')
+                    .expect(&format!("no arc found in optimized: {d} -> {result}"));
+                assert_eq!(arc.args[3] as i32, large_arc, "large-arc-flag mangled for {d} -> {result}");
+                assert_eq!(arc.args[4] as i32, sweep, "sweep-flag mangled for {d} -> {result}");
+            }
+        }
+    }
+
+    #[test]
+    fn zero_radius_arc_survives() {
+        let d = "M10 10A0 0 0 0 1 20 20";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        assert!(!cmds.is_empty(), "zero-radius arc should not produce empty path");
+    }
+
+    #[test]
+    fn negative_zero_normalized() {
+        assert_eq!(format_num(-0.0), "0", "format_num(-0.0) should be '0'");
+        assert_eq!(round_and_format(-0.0, 3), "0", "round_and_format(-0.0, 3) should be '0'");
+        assert_eq!(round_and_format(-0.0001, 3), "0", "near-negative-zero should round to '0'");
+    }
+
+    #[test]
+    fn large_coordinates_roundtrip() {
+        let d = "M99999 99999L0 0";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        assert!(cmds.len() >= 2, "should have at least 2 commands: {result}");
+    }
+
+    #[test]
+    fn tiny_decimals_dont_corrupt() {
+        let d = "M0.001 0.001L0.002 0.002";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        assert!(cmds.len() >= 2, "should have at least 2 commands: {result}");
+    }
+
+    #[test]
+    fn implicit_lineto_after_moveto() {
+        let d = "M0 0 10 10 20 20";
+        let cmds = parse_path(d).unwrap();
+        assert_eq!(cmds.len(), 3, "M with extra pairs should produce implicit L commands");
+        assert_eq!(cmds[0].cmd, 'M');
+        assert_eq!(cmds[1].cmd, 'L');
+        assert_eq!(cmds[2].cmd, 'L');
+    }
+
+    #[test]
+    fn multiple_close_commands() {
+        let d = "M0 0L10 10ZZ";
+        let result = optimize_path(d, 3);
+        assert!(result.is_some(), "double Z should not crash");
+    }
+
+    #[test]
+    fn full_circle_arc_preserved() {
+        let d = "M150 0A150 150 0 1 0 150 300A150 150 0 1 0 150 0Z";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        let arc_count = cmds.iter().filter(|c| c.cmd == 'a' || c.cmd == 'A').count();
+        assert_eq!(arc_count, 2, "full circle must keep both arcs: {result}");
+    }
+
+    #[test]
+    fn accumulated_rounding_stays_accurate() {
+        let d = "M0 0L0.4 0.4L0.8 0.8L1.2 1.2L1.6 1.6L2.0 2.0L2.4 2.4L2.8 2.8L3.2 3.2L3.6 3.6L4.0 4.0";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        assert!(cmds.len() >= 11, "should preserve all line segments: {result}");
+    }
+
+    #[test]
+    fn compact_mixed_path_survives() {
+        let d = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        assert!(cmds.len() >= 4, "should preserve all commands: {result}");
+        let second = optimize_path(&result, 3).unwrap();
+        assert_eq!(result, second, "should converge: {result} vs {second}");
+    }
+
+    // ── New optimization tests ─────────────────────────────────────────
+
+    #[test]
+    fn cubic_to_shorthand_s() {
+        // First: C 0 50 50 50 50 0 — quarter-circle-like curve from (0,0) to (50,0)
+        // Reflection of cp2=(50,50) across endpoint (50,0) = (50, -50)
+        // Second: C 50 -50 100 -50 100 0 — cp1 matches reflection → can become S
+        let d = "M0 0C0 50 50 50 50 0C50-50 100-50 100 0";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        let has_s = cmds.iter().any(|c| c.cmd == 's' || c.cmd == 'S');
+        assert!(has_s, "should detect S shorthand: {result}");
+    }
+
+    #[test]
+    fn quadratic_to_shorthand_t() {
+        // Q 10 20 30 40 followed by Q (2*30-10) (2*40-20) 60 80
+        // = Q 10 20 30 40 Q 50 60 60 80
+        let d = "M0 0Q10 20 30 40Q50 60 60 80";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        let has_t = cmds.iter().any(|c| c.cmd == 't' || c.cmd == 'T');
+        assert!(has_t, "should detect T shorthand: {result}");
+    }
+
+    #[test]
+    fn degenerate_cubic_becomes_line() {
+        // Cubic where all control points are collinear: C on the line from (0,0) to (30,30)
+        let d = "M0 0C10 10 20 20 30 30";
+        let result = optimize_path(d, 3).unwrap();
+        assert!(!result.contains('C') && !result.contains('c'),
+            "degenerate cubic should become line: {result}");
+    }
+
+    #[test]
+    fn degenerate_quadratic_becomes_line() {
+        let d = "M0 0Q15 15 30 30";
+        let result = optimize_path(d, 3).unwrap();
+        assert!(!result.contains('Q') && !result.contains('q'),
+            "degenerate quadratic should become line: {result}");
+    }
+
+    #[test]
+    fn non_degenerate_cubic_preserved() {
+        let d = "M0 0C0 50 50 50 50 0";
+        let result = optimize_path(d, 3).unwrap();
+        assert!(result.contains('c') || result.contains('C'),
+            "non-degenerate cubic should stay as curve: {result}");
+    }
+
+    #[test]
+    fn remove_zero_length_line() {
+        let d = "M10 10L10 10L20 20";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        // Should have M + L (the duplicate L10 10 removed)
+        assert!(cmds.len() <= 2, "zero-length line should be removed: {result}");
+    }
+
+    #[test]
+    fn smooth_cubic_expansion_and_redetection() {
+        // Input already has S shorthand; after expansion and re-detection it should still work
+        let d = "M0 0C10 20 30 40 50 60S80 90 100 110";
+        let result = optimize_path(d, 3).unwrap();
+        let cmds = parse_path(&result).unwrap();
+        assert!(cmds.len() >= 2, "should preserve commands: {result}");
+        // Should converge
+        let second = optimize_path(&result, 3).unwrap();
+        assert_eq!(result, second, "should converge: {result}");
     }
 }

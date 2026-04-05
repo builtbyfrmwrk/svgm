@@ -22,20 +22,17 @@ impl Pass for MinifyWhitespace {
 
         for id in ids {
             let node = doc.node(id);
-            if let NodeKind::Text(ref text) = node.kind {
-                if text.trim().is_empty() {
+            if let NodeKind::Text(ref text) = node.kind
+                && text.trim().is_empty() {
                     // Check if parent is a text-content element
-                    if let Some(parent_id) = node.parent {
-                        if let NodeKind::Element(ref parent_elem) = doc.node(parent_id).kind {
-                            if TEXT_CONTENT_ELEMENTS.contains(&parent_elem.name.as_str()) {
+                    if let Some(parent_id) = node.parent
+                        && let NodeKind::Element(ref parent_elem) = doc.node(parent_id).kind
+                            && TEXT_CONTENT_ELEMENTS.contains(&parent_elem.name.as_str()) {
                                 continue;
                             }
-                        }
-                    }
                     doc.remove(id);
                     changed = true;
                 }
-            }
         }
 
         if changed { PassResult::Changed } else { PassResult::Unchanged }

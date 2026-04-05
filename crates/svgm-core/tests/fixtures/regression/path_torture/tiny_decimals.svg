@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">
+  <!-- Near-zero coordinates at precision 3 -->
+  <path d="M0.001 0.001L0.002 0.002"/>
+  <!-- Half-unit rounding -->
+  <path d="M100.0005 200.0005L100.0015 200.0015"/>
+  <!-- Negative tiny values -->
+  <path d="M-0.0005 0.0005L0.001 -0.001"/>
+</svg>

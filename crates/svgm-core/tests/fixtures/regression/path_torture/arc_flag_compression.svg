@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+  <!-- Repeated arcs with different flags -->
+  <path d="M10 80A25 25 0 0 1 50 80A25 25 0 1 0 90 80"/>
+  <!-- Single arc flag compression -->
+  <path d="M80 80A45 45 0 0 0 125 125"/>
+  <!-- Consecutive arcs all flag combos -->
+  <path d="M230 230A45 45 0 1 0 275 275A45 45 0 1 1 320 320"/>
+</svg>

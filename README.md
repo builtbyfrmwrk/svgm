@@ -1,6 +1,6 @@
 <p align="center">
   <br>
-  <a href="https://github.com/builtbyfrmwrk/svgm">
+  <a href="https://github.com/madebyfrmwrk/svgm">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/svgm-light.svg">
       <source media="(prefers-color-scheme: light)" srcset="assets/svgm-dark.svg">
@@ -61,7 +61,7 @@ cargo install svgm
 ### Build from repo
 
 ```bash
-git clone https://github.com/builtbyfrmwrk/svgm.git
+git clone https://github.com/madebyfrmwrk/svgm.git
 cd svgm
 cargo build --release
 # Binary at ./target/release/svgm
@@ -152,10 +152,19 @@ Passes operate directly on the in-memory AST, avoiding repeated serialize/parse 
 
 **Structural** — simplify the tree
 - Collapse useless `<g>` wrappers (no-attribute groups, single-child groups)
+- Reference safety: groups with `clip-path`, `mask`, or `filter` are never collapsed
+
+**Transform** — simplify and apply transforms
+- Merge consecutive transforms into a single equivalent (`translate(10,20) translate(5,5)` -> `translate(15,25)`)
+- Remove identity transforms (`scale(1)`, `translate(0,0)`, `rotate(0)`)
+- Apply pure translates directly to element coordinates (rect, circle, ellipse, line, text)
 
 **Geometry** — compress path data
 - Absolute-to-relative coordinate conversion where shorter
 - `L` to `H`/`V` shortcut commands
+- `C` to `S` and `Q` to `T` shorthand curves (reflected control points)
+- Degenerate curve to line simplification (collinear control points)
+- Redundant command removal (zero-length lines)
 - Strip leading zeros (`.5` instead of `0.5`)
 - Implicit command repetition
 - Minimal separator insertion
@@ -193,10 +202,10 @@ svgm/
 
 ## Roadmap
 
-- [ ] Transform merging and application
+- [x] Transform merging and simplification (Phase 1 + partial Phase 2)
+- [ ] Transform application to path coordinates and push-down from groups
 - [ ] Path merging (adjacent paths with identical attributes)
 - [ ] Shape-to-path conversion
-- [ ] `<use>` dereferencing
 - [ ] CSS `<style>` minification
 - [ ] Recursive directory processing (`-r`)
 - [ ] WASM build for browser usage
@@ -207,17 +216,17 @@ svgm/
 svgm is early, but already usable. Contributions and real-world SVG edge cases are especially helpful.
 
 ```bash
-git clone https://github.com/builtbyfrmwrk/svgm.git
+git clone https://github.com/madebyfrmwrk/svgm.git
 cd svgm
 cargo test --workspace
 cargo clippy --workspace  # must pass clean
 ```
 
-If you find an SVG that svgm corrupts or handles worse than expected, please [open an issue](https://github.com/builtbyfrmwrk/svgm/issues) with the SVG attached.
+If you find an SVG that svgm corrupts or handles worse than expected, please [open an issue](https://github.com/madebyfrmwrk/svgm/issues) with the SVG attached.
 
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) and [Apache 2.0](LICENSE-APACHE).
 
 [license-badge]: https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg
-[license-url]: https://github.com/builtbyfrmwrk/svgm/blob/main/LICENSE-MIT
+[license-url]: https://github.com/madebyfrmwrk/svgm/blob/main/LICENSE-MIT
