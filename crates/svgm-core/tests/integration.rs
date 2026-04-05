@@ -214,10 +214,7 @@ fn path_torture_structural_equivalence() {
             // Path count may change: convertShapeToPath increases it (shapes→paths),
             // mergePaths decreases it (adjacent identical-attr paths merged).
             // We just verify the output is non-empty and parseable.
-            assert!(
-                !output.is_empty(),
-                "{name}: output should not be empty"
-            );
+            assert!(!output.is_empty(), "{name}: output should not be empty");
         }
     }
 }

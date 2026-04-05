@@ -44,8 +44,8 @@ const BLOCKING_ATTRS: &[&str] = &[
     "marker-start",
     "marker-mid",
     "marker-end",
-    "fill-rule",  // evenodd + overlapping paths = different rendering
-    "clip-rule",  // same issue as fill-rule
+    "fill-rule", // evenodd + overlapping paths = different rendering
+    "clip-rule", // same issue as fill-rule
 ];
 
 /// Try to merge adjacent <path> siblings under the given parent.
@@ -221,12 +221,9 @@ fn attrs_match(doc: &Document, a: NodeId, b: NodeId) -> bool {
 
     // Every attr in A must have an exact match in B (order-independent)
     for &(prefix_a, name_a, value_a) in &attrs_a {
-        if !attrs_b
-            .iter()
-            .any(|&(prefix_b, name_b, value_b)| {
-                prefix_a == prefix_b && name_a == name_b && value_a == value_b
-            })
-        {
+        if !attrs_b.iter().any(|&(prefix_b, name_b, value_b)| {
+            prefix_a == prefix_b && name_a == name_b && value_a == value_b
+        }) {
             return false;
         }
     }
@@ -264,7 +261,10 @@ mod tests {
         assert_eq!(result, PassResult::Changed);
         // Should be one path with concatenated d
         assert_eq!(output.matches("<path").count(), 1);
-        assert!(output.contains("M0 0L10 10") && output.contains("M20 20L30 30"), "expected merged d, got: {output}");
+        assert!(
+            output.contains("M0 0L10 10") && output.contains("M20 20L30 30"),
+            "expected merged d, got: {output}"
+        );
     }
 
     #[test]
@@ -284,7 +284,8 @@ mod tests {
 
     #[test]
     fn no_merge_single_path() {
-        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M0 0L10 10\" fill=\"red\"/></svg>";
+        let input =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M0 0L10 10\" fill=\"red\"/></svg>";
         let (result, _) = run_pass(input);
         assert_eq!(result, PassResult::Unchanged);
     }

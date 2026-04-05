@@ -189,7 +189,9 @@ fn extract_url_refs(value: &str) -> Vec<String> {
     while let Some(start) = search.find("url(#") {
         let rest = &search[start + 5..];
         if let Some(end) = rest.find(')') {
-            let id = rest[..end].trim().trim_matches(|c: char| c == '\'' || c == '"');
+            let id = rest[..end]
+                .trim()
+                .trim_matches(|c: char| c == '\'' || c == '"');
             if !id.is_empty() {
                 refs.push(id.to_string());
             }
@@ -202,11 +204,7 @@ fn extract_url_refs(value: &str) -> Vec<String> {
 /// Extract an ID from an href="#id" value.
 fn extract_href_ref(value: &str) -> Option<&str> {
     let id = value.strip_prefix('#')?;
-    if id.is_empty() {
-        None
-    } else {
-        Some(id)
-    }
+    if id.is_empty() { None } else { Some(id) }
 }
 
 /// Extract IDs from SMIL timing values like "id.click", "id.end+2s".
@@ -235,9 +233,7 @@ fn extract_css_id_refs(text: &str, known_ids: &HashSet<String>) -> Vec<String> {
             let start = i + 1;
             let mut end = start;
             while end < bytes.len()
-                && (bytes[end].is_ascii_alphanumeric()
-                    || bytes[end] == b'_'
-                    || bytes[end] == b'-')
+                && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_' || bytes[end] == b'-')
             {
                 end += 1;
             }
@@ -323,9 +319,7 @@ fn replace_css_ids(
             let start = i + 1;
             let mut end = start;
             while end < bytes.len()
-                && (bytes[end].is_ascii_alphanumeric()
-                    || bytes[end] == b'_'
-                    || bytes[end] == b'-')
+                && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_' || bytes[end] == b'-')
             {
                 end += 1;
             }
@@ -428,7 +422,8 @@ mod tests {
 
     #[test]
     fn no_change_without_ids() {
-        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"10\" height=\"10\"/></svg>";
+        let input =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"10\" height=\"10\"/></svg>";
         let (result, _) = run_pass(input);
         assert_eq!(result, PassResult::Unchanged);
     }

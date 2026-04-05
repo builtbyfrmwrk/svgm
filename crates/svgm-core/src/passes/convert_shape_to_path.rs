@@ -44,9 +44,8 @@ impl Pass for ConvertShapeToPath {
                     let node = doc.node_mut(id);
                     if let NodeKind::Element(ref mut elem) = node.kind {
                         elem.name = "circle".to_string();
-                        elem.attributes.retain(|a| {
-                            a.prefix.is_some() || (a.name != "rx" && a.name != "ry")
-                        });
+                        elem.attributes
+                            .retain(|a| a.prefix.is_some() || (a.name != "rx" && a.name != "ry"));
                         elem.attributes.push(Attribute {
                             prefix: None,
                             name: "r".to_string(),
@@ -318,18 +317,18 @@ fn line_to_path_d(elem: &crate::ast::Element, precision: u32) -> Option<String> 
     ))
 }
 
-fn poly_to_path_d(
-    elem: &crate::ast::Element,
-    precision: u32,
-    close: bool,
-) -> Option<String> {
+fn poly_to_path_d(elem: &crate::ast::Element, precision: u32, close: bool) -> Option<String> {
     let points_str = elem.attr("points")?;
     let points = parse_points(points_str)?;
     if points.is_empty() {
         return None;
     }
 
-    let mut d = format!("M{} {}", fmt(points[0].0, precision), fmt(points[0].1, precision));
+    let mut d = format!(
+        "M{} {}",
+        fmt(points[0].0, precision),
+        fmt(points[0].1, precision)
+    );
     for &(x, y) in &points[1..] {
         d.push('L');
         d.push_str(&fmt(x, precision));
@@ -361,7 +360,13 @@ fn parse_number_list(s: &str) -> Option<Vec<f64>> {
 
     while i < chars.len() {
         // Skip whitespace and commas
-        while i < chars.len() && (chars[i] == b' ' || chars[i] == b',' || chars[i] == b'\t' || chars[i] == b'\n' || chars[i] == b'\r') {
+        while i < chars.len()
+            && (chars[i] == b' '
+                || chars[i] == b','
+                || chars[i] == b'\t'
+                || chars[i] == b'\n'
+                || chars[i] == b'\r')
+        {
             i += 1;
         }
         if i >= chars.len() {
@@ -458,7 +463,8 @@ mod tests {
 
     #[test]
     fn rect_default_xy() {
-        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"100\" height=\"50\"/></svg>";
+        let input =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"100\" height=\"50\"/></svg>";
         let (result, output) = run_pass(input);
         assert_eq!(result, PassResult::Changed);
         assert!(output.contains("d=\"M0 0h100v50H0z\""));
@@ -575,7 +581,8 @@ mod tests {
 
     #[test]
     fn zero_size_rect_skipped() {
-        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"0\" height=\"50\"/></svg>";
+        let input =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"0\" height=\"50\"/></svg>";
         let (result, output) = run_pass(input);
         assert_eq!(result, PassResult::Unchanged);
         assert!(output.contains("<rect"));
@@ -583,7 +590,8 @@ mod tests {
 
     #[test]
     fn zero_radius_circle_skipped() {
-        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"50\" cy=\"50\" r=\"0\"/></svg>";
+        let input =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"50\" cy=\"50\" r=\"0\"/></svg>";
         let (result, output) = run_pass(input);
         assert_eq!(result, PassResult::Unchanged);
         assert!(output.contains("<circle"));
@@ -634,7 +642,8 @@ mod tests {
 
     #[test]
     fn polyline_odd_number_of_values_skipped() {
-        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\"><polyline points=\"10,20,30\"/></svg>";
+        let input =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><polyline points=\"10,20,30\"/></svg>";
         let (result, _) = run_pass(input);
         assert_eq!(result, PassResult::Unchanged);
     }

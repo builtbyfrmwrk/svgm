@@ -46,11 +46,7 @@ fn main() {
     let mut svg_files: Vec<_> = fs::read_dir(&corpus_dir)
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .map_or(false, |ext| ext == "svg")
-        })
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "svg"))
         .collect();
     svg_files.sort_by_key(|e| e.file_name());
 
