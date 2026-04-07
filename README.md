@@ -2,9 +2,9 @@
   <br>
   <a href="https://github.com/madebyfrmwrk/svgm">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/svgm-dark.svg">
-      <source media="(prefers-color-scheme: light)" srcset="assets/svgm-light.svg">
-      <img alt="svgm" src="assets/svgm-light.svg" height="42">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/madebyfrmwrk/svgm/main/assets/svgm-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/madebyfrmwrk/svgm/main/assets/svgm-light.svg">
+      <img alt="svgm" src="https://raw.githubusercontent.com/madebyfrmwrk/svgm/main/assets/svgm-light.svg" height="42">
     </picture>
   </a>
   <br>
