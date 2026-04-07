@@ -75,49 +75,51 @@ svgm icon.svg -o icon.min.svg    # Write to a different file
 svgm icon.svg --stdout           # Print to stdout instead of overwriting
 svgm icon.svg --dry-run          # Preview size reduction without writing
 svgm icons/*.svg                 # Optimize multiple files in place
+svgm -r ./icons                  # Recursively optimize all SVGs in a directory
+svgm -r ./icons -o ./icons-min   # Recursive with output directory
 svgm icon.svg --quiet            # Suppress all output except errors
 ```
 
 When piped (e.g. `svgm icon.svg | gzip`), output goes to stdout automatically.
 
+### Presets
+
+```bash
+svgm icon.svg --preset safe         # Removal + normalization only (17 passes)
+svgm icon.svg --preset balanced     # Full pass set (24 passes, default)
+svgm icon.svg --preset aggressive   # Full pass set, lower precision
+svgm icon.svg --precision 2         # Override numeric precision on any preset
+```
+
+### Config file
+
+Create an `svgm.config.toml` in your project root:
+
+```toml
+preset = "balanced"
+precision = 3
+
+[passes]
+removeDesc = true          # opt-in: strip <desc> and <title>
+convertShapeToPath = false  # opt-out: disable a specific pass
+```
+
+svgm auto-discovers the config by walking up from the input file's directory. Use `--config path` to specify explicitly, or `--no-config` to skip.
+
 ## Benchmarks
 
-17 real SVG logos (Figma/Illustrator exports). Same files, same machine.
+100 real-world SVG logos (Figma, Illustrator, Inkscape, svgrepo exports). 902.7 KiB total original size.
 
 | | **svgm** | **SVGO** |
 |:--|:--|:--|
-| **Compression** | 38.4% | 46.9% |
-| **Total time** | 941ms | 2,174ms |
-| **Speed** | **2.3x faster** | baseline |
+| **Compression** | 14.9% | 18.2% |
+| **Median time** | 110ms | 291ms |
+| **Speed** | **2.6x faster** | baseline |
 | **Invocations to converge** | **1** | 1-3 |
 
-<details>
-<summary><b>Per-file breakdown</b></summary>
+Full benchmark details at [svgm.dev/docs/benchmarks](https://svgm.dev/docs/benchmarks).
 
-```
-FILE                          SVGM         SVGO
-anthropic-icon.svg           48.1%        74.8%
-apidog.svg                   46.8%        55.9%
-astro.svg                    47.2%        50.9%
-claude.svg                   49.2%        53.1%
-google-play-console.svg      51.1%        60.9%
-google-workspace.svg         49.6%        63.1%
-incident.svg                 49.8%        54.7%
-moonshot-ai.svg              55.5%        61.6%
-obsidian-icon.svg            32.5%        45.2%
-obsidian.svg                 48.3%        53.8%
-oxc-dark.svg                 16.5%        25.5%
-oxc-icon.svg                 15.7%        25.1%
-oxc.svg                      16.4%        25.4%
-perplexity.svg               52.8%        59.4%
-vercel.svg                   46.9%        63.5%
-vite.svg                     15.2%        25.7%
-xcode.svg                    36.7%        43.8%
-```
-
-</details>
-
-svgm is closing the compression gap while staying significantly faster and shipping as a single native binary. Path and transform optimizations are complete; shape-to-path, path merging, and CSS optimizations are still being developed.
+svgm ships as a single native binary. The ~3 point compression gap is actively being closed.
 
 ## How it works
 
@@ -161,6 +163,8 @@ Passes operate directly on the in-memory AST, avoiding repeated serialize/parse 
 - Push transforms from single-child groups to child, enabling group collapse
 
 **Geometry** — compress path data
+- Shape-to-path conversion (rect, circle, ellipse, line, polyline, polygon → shorter `<path>`)
+- Path merging (adjacent paths with identical attributes)
 - Absolute-to-relative coordinate conversion where shorter
 - `L` to `H`/`V` shortcut commands
 - `C` to `S` and `Q` to `T` shorthand curves (reflected control points)
@@ -169,6 +173,10 @@ Passes operate directly on the in-memory AST, avoiding repeated serialize/parse 
 - Strip leading zeros (`.5` instead of `0.5`)
 - Implicit command repetition
 - Minimal separator insertion
+
+**IDs** — clean up references
+- Remove unused `id` attributes
+- Shorten referenced IDs to minimal unique names
 
 ### Safety
 
@@ -190,6 +198,19 @@ println!("{}", result.data);       // optimized SVG string
 println!("{}", result.iterations); // convergence iterations
 ```
 
+With preset/precision control:
+
+```rust
+use svgm_core::{optimize_with_config, Config, Preset};
+
+let config = Config {
+    preset: Preset::Safe,
+    precision: Some(2),
+    ..Config::default()
+};
+let result = optimize_with_config("<svg>...</svg>", &config).unwrap();
+```
+
 ## Project structure
 
 ```
@@ -204,11 +225,12 @@ svgm/
 ## Roadmap
 
 - [x] Transform merging, application, and push-down (all 3 phases)
-- [ ] Shape-to-path conversion (rect, circle, ellipse → shorter `<path>`)
-- [ ] Path merging (adjacent paths with identical attributes)
-- [ ] ID cleanup (remove unused, shorten used)
-- [ ] CSS `<style>` minification
-- [ ] Recursive directory processing (`-r`)
+- [x] Shape-to-path conversion (rect, circle, ellipse → shorter `<path>`)
+- [x] Path merging (adjacent paths with identical attributes)
+- [x] ID cleanup (remove unused, shorten used)
+- [x] CSS `<style>` inlining and minification
+- [x] Recursive directory processing (`-r`)
+- [x] Safety presets and config file support
 - [ ] WASM build for browser usage
 - [ ] Node.js bindings via napi-rs
 
