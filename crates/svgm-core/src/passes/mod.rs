@@ -45,32 +45,7 @@ pub trait Pass {
     fn run(&self, doc: &mut Document) -> PassResult;
 }
 
-/// Returns the default set of safe passes in execution order.
+/// Returns the default set of passes in execution order (Balanced preset).
 pub fn default_passes() -> Vec<Box<dyn Pass>> {
-    vec![
-        Box::new(remove_doctype::RemoveDoctype),
-        Box::new(remove_proc_inst::RemoveProcInst),
-        Box::new(remove_comments::RemoveComments),
-        Box::new(remove_metadata::RemoveMetadata),
-        Box::new(remove_editor_data::RemoveEditorData),
-        Box::new(remove_empty_attrs::RemoveEmptyAttrs),
-        Box::new(remove_empty_text::RemoveEmptyText),
-        Box::new(remove_empty_containers::RemoveEmptyContainers),
-        Box::new(remove_hidden_elems::RemoveHiddenElems),
-        Box::new(remove_unused_namespaces::RemoveUnusedNamespaces),
-        Box::new(cleanup_attrs::CleanupAttrs),
-        Box::new(inline_styles::InlineStyles),
-        Box::new(cleanup_numeric_values::CleanupNumericValues::default()),
-        Box::new(convert_colors::ConvertColors),
-        Box::new(remove_unknowns_and_defaults::RemoveUnknownsAndDefaults),
-        Box::new(convert_shape_to_path::ConvertShapeToPath::default()),
-        Box::new(convert_transform::ConvertTransform::default()),
-        Box::new(collapse_groups::CollapseGroups),
-        Box::new(cleanup_ids::CleanupIds),
-        Box::new(convert_path_data::ConvertPathData::default()),
-        Box::new(merge_paths::MergePaths),
-        Box::new(sort_attrs::SortAttrs),
-        Box::new(minify_styles::MinifyStyles),
-        Box::new(minify_whitespace::MinifyWhitespace),
-    ]
+    crate::config::passes_for_config(&crate::config::Config::default())
 }

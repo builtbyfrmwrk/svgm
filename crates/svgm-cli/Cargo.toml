@@ -18,3 +18,8 @@ svgm-core.workspace = true
 clap.workspace = true
 indicatif.workspace = true
 console.workspace = true
+toml.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

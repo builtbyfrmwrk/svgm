@@ -1,10 +1,30 @@
-use clap::Parser;
+mod config_file;
+
+use clap::{Parser, ValueEnum};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use svgm_core::Config;
+
+#[derive(Clone, Copy, ValueEnum)]
+enum CliPreset {
+    Safe,
+    Balanced,
+    Aggressive,
+}
+
+impl From<CliPreset> for svgm_core::Preset {
+    fn from(p: CliPreset) -> Self {
+        match p {
+            CliPreset::Safe => svgm_core::Preset::Safe,
+            CliPreset::Balanced => svgm_core::Preset::Balanced,
+            CliPreset::Aggressive => svgm_core::Preset::Aggressive,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(
@@ -20,6 +40,22 @@ struct Cli {
     /// Output file or directory (default: overwrite in place; prints to stdout if piped)
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    /// Optimization preset [safe: removal/normalization only, balanced: full optimization, aggressive: lower precision]
+    #[arg(long, value_enum)]
+    preset: Option<CliPreset>,
+
+    /// Numeric precision for rounding (default: 3 for safe/balanced, 2 for aggressive)
+    #[arg(long, value_name = "N")]
+    precision: Option<u32>,
+
+    /// Path to config file (default: auto-discover svgm.config.toml)
+    #[arg(long, value_name = "PATH")]
+    config: Option<PathBuf>,
+
+    /// Skip config file auto-discovery
+    #[arg(long)]
+    no_config: bool,
 
     /// Process directories recursively
     #[arg(short, long)]
@@ -42,8 +78,66 @@ struct Cli {
     quiet: bool,
 }
 
+fn build_config(cli: &Cli) -> Config {
+    let start_dir = cli
+        .input
+        .first()
+        .and_then(|p| {
+            if p.is_dir() {
+                Some(p.as_path())
+            } else {
+                p.parent()
+            }
+        })
+        .unwrap_or(Path::new("."));
+
+    let explicit = cli.config.as_deref();
+
+    // Load config file (unless --no-config)
+    let mut config = if cli.no_config {
+        Config::default()
+    } else {
+        match config_file::find_config(explicit, start_dir) {
+            Some(path) => match config_file::load_config(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!(
+                        "{} {}: {}",
+                        style("error:").red().bold(),
+                        path.display(),
+                        e
+                    );
+                    std::process::exit(1);
+                }
+            },
+            None => {
+                if explicit.is_some() {
+                    eprintln!(
+                        "{} config file not found: {}",
+                        style("error:").red().bold(),
+                        cli.config.as_ref().unwrap().display()
+                    );
+                    std::process::exit(1);
+                }
+                Config::default()
+            }
+        }
+    };
+
+    // CLI flags override config file
+    if let Some(preset) = cli.preset {
+        config.preset = preset.into();
+    }
+    if let Some(precision) = cli.precision {
+        config.precision = Some(precision);
+    }
+
+    config
+}
+
 fn main() {
     let cli = Cli::parse();
+    let config = build_config(&cli);
 
     if cli.recursive {
         // -r requires exactly one input and it must be a directory
@@ -123,7 +217,7 @@ fn main() {
         }
 
         let base_dir = cli.output.as_ref().map(|_| cli.input[0].as_path());
-        run_directory_mode(&cli, &files, base_dir);
+        run_directory_mode(&cli, &config, &files, base_dir);
     } else {
         // File mode validations
         for input in &cli.input {
@@ -154,16 +248,16 @@ fn main() {
         }
 
         let files: Vec<PathBuf> = cli.input.clone();
-        run_file_mode(&cli, &files);
+        run_file_mode(&cli, &config, &files);
     }
 }
 
-fn run_file_mode(cli: &Cli, files: &[PathBuf]) {
+fn run_file_mode(cli: &Cli, config: &Config, files: &[PathBuf]) {
     let multi_file = files.len() > 1;
     let mut exit_code = 0;
 
     for file in files {
-        if let Err(e) = process_file(cli, file, multi_file) {
+        if let Err(e) = process_file(cli, config, file, multi_file) {
             eprintln!(
                 "{} {}: {}",
                 style("error:").red().bold(),
@@ -179,7 +273,7 @@ fn run_file_mode(cli: &Cli, files: &[PathBuf]) {
     }
 }
 
-fn run_directory_mode(cli: &Cli, files: &[PathBuf], base_dir: Option<&Path>) {
+fn run_directory_mode(cli: &Cli, config: &Config, files: &[PathBuf], base_dir: Option<&Path>) {
     let total = files.len() as u64;
     let mut total_input = 0usize;
     let mut total_output = 0usize;
@@ -225,7 +319,7 @@ fn run_directory_mode(cli: &Cli, files: &[PathBuf], base_dir: Option<&Path>) {
             _ => None,
         };
 
-        match optimize_file(file) {
+        match optimize_file(file, config) {
             Ok((input_size, output_data, _iterations)) => {
                 total_input += input_size;
                 total_output += output_data.len();
@@ -309,15 +403,19 @@ fn run_directory_mode(cli: &Cli, files: &[PathBuf], base_dir: Option<&Path>) {
     }
 }
 
-fn optimize_file(path: &Path) -> Result<(usize, String, usize), Box<dyn std::error::Error>> {
+fn optimize_file(
+    path: &Path,
+    config: &Config,
+) -> Result<(usize, String, usize), Box<dyn std::error::Error>> {
     let input = fs::read_to_string(path)?;
     let input_size = input.len();
-    let result = svgm_core::optimize(&input)?;
+    let result = svgm_core::optimize_with_config(&input, config)?;
     Ok((input_size, result.data, result.iterations))
 }
 
 fn process_file(
     cli: &Cli,
+    config: &Config,
     input_path: &Path,
     multi_file: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -354,7 +452,7 @@ fn process_file(
     };
 
     let start = Instant::now();
-    let result = svgm_core::optimize(&input)?;
+    let result = svgm_core::optimize_with_config(&input, config)?;
     let elapsed = start.elapsed();
     let output_size = result.data.len();
 
