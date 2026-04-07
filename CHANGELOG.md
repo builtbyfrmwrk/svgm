@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.3
+
+### Added
+
+- Recursive directory processing with `-r` flag: `svgm -r ./icons` optimizes all SVGs in place recursively.
+- Output directory support: `svgm -r ./icons -o ./icons-min` writes optimized files preserving directory structure.
+- Progress bar and aggregate summary for directory mode.
+
+### Changed
+
+- `-r` requires exactly one directory input — mixed input (`svgm -r dir file.svg`) is not allowed.
+- Output directory overlapping source directory is now an error to prevent recursive write loops.
+
 ## 0.1.2
 
 ### Fixed
