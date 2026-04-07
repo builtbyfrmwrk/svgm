@@ -101,12 +101,7 @@ fn build_config(cli: &Cli) -> Config {
             Some(path) => match config_file::load_config(&path) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!(
-                        "{} {}: {}",
-                        style("error:").red().bold(),
-                        path.display(),
-                        e
-                    );
+                    eprintln!("{} {}: {}", style("error:").red().bold(), path.display(), e);
                     std::process::exit(1);
                 }
             },
@@ -258,12 +253,7 @@ fn run_file_mode(cli: &Cli, config: &Config, files: &[PathBuf]) {
 
     for file in files {
         if let Err(e) = process_file(cli, config, file, multi_file) {
-            eprintln!(
-                "{} {}: {}",
-                style("error:").red().bold(),
-                file.display(),
-                e
-            );
+            eprintln!("{} {}: {}", style("error:").red().bold(), file.display(), e);
             exit_code = 1;
         }
     }
@@ -338,12 +328,7 @@ fn run_directory_mode(cli: &Cli, config: &Config, files: &[PathBuf], base_dir: O
                 }
             }
             Err(e) => {
-                eprintln!(
-                    "{} {}: {}",
-                    style("error:").red().bold(),
-                    file.display(),
-                    e
-                );
+                eprintln!("{} {}: {}", style("error:").red().bold(), file.display(), e);
                 errors += 1;
             }
         }
@@ -376,11 +361,7 @@ fn run_directory_mode(cli: &Cli, config: &Config, files: &[PathBuf], base_dir: O
         };
 
         eprintln!();
-        eprintln!(
-            "  {} {} optimized",
-            style(optimized).bold(),
-            file_word
-        );
+        eprintln!("  {} {} optimized", style(optimized).bold(), file_word);
         eprintln!(
             "  {} → {} ({})  {}",
             style(format_bytes(total_input)).dim(),

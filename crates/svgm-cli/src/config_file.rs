@@ -152,7 +152,10 @@ removeComments = false
     #[test]
     fn find_config_explicit_path() {
         let p = Path::new("/tmp/custom.toml");
-        assert_eq!(find_config(Some(p), Path::new("/somewhere")), Some(p.to_path_buf()));
+        assert_eq!(
+            find_config(Some(p), Path::new("/somewhere")),
+            Some(p.to_path_buf())
+        );
     }
 
     #[test]

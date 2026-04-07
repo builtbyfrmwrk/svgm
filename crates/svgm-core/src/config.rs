@@ -88,13 +88,21 @@ fn create_pass(name: &str, precision: u32) -> Box<dyn Pass> {
         "removeEmptyText" => Box::new(passes::remove_empty_text::RemoveEmptyText),
         "removeEmptyContainers" => Box::new(passes::remove_empty_containers::RemoveEmptyContainers),
         "removeHiddenElems" => Box::new(passes::remove_hidden_elems::RemoveHiddenElems),
-        "removeUnusedNamespaces" => Box::new(passes::remove_unused_namespaces::RemoveUnusedNamespaces),
+        "removeUnusedNamespaces" => {
+            Box::new(passes::remove_unused_namespaces::RemoveUnusedNamespaces)
+        }
         "cleanupAttrs" => Box::new(passes::cleanup_attrs::CleanupAttrs),
         "inlineStyles" => Box::new(passes::inline_styles::InlineStyles),
-        "cleanupNumericValues" => Box::new(passes::cleanup_numeric_values::CleanupNumericValues { precision }),
+        "cleanupNumericValues" => {
+            Box::new(passes::cleanup_numeric_values::CleanupNumericValues { precision })
+        }
         "convertColors" => Box::new(passes::convert_colors::ConvertColors),
-        "removeUnknownsAndDefaults" => Box::new(passes::remove_unknowns_and_defaults::RemoveUnknownsAndDefaults),
-        "convertShapeToPath" => Box::new(passes::convert_shape_to_path::ConvertShapeToPath { precision }),
+        "removeUnknownsAndDefaults" => {
+            Box::new(passes::remove_unknowns_and_defaults::RemoveUnknownsAndDefaults)
+        }
+        "convertShapeToPath" => {
+            Box::new(passes::convert_shape_to_path::ConvertShapeToPath { precision })
+        }
         "convertTransform" => Box::new(passes::convert_transform::ConvertTransform { precision }),
         "collapseGroups" => Box::new(passes::collapse_groups::CollapseGroups),
         "cleanupIds" => Box::new(passes::cleanup_ids::CleanupIds),
@@ -139,10 +147,7 @@ mod tests {
     use super::*;
 
     fn pass_names(config: &Config) -> Vec<&'static str> {
-        passes_for_config(config)
-            .iter()
-            .map(|p| p.name())
-            .collect()
+        passes_for_config(config).iter().map(|p| p.name()).collect()
     }
 
     #[test]
@@ -152,13 +157,28 @@ mod tests {
             ..Config::default()
         };
         let names = pass_names(&config);
-        assert_eq!(names, vec![
-            "removeDoctype", "removeProcInst", "removeComments", "removeMetadata",
-            "removeEditorData", "removeEmptyAttrs", "removeEmptyText",
-            "removeEmptyContainers", "removeHiddenElems", "removeUnusedNamespaces",
-            "cleanupAttrs", "cleanupNumericValues", "convertColors",
-            "removeUnknownsAndDefaults", "sortAttrs", "minifyStyles", "minifyWhitespace",
-        ]);
+        assert_eq!(
+            names,
+            vec![
+                "removeDoctype",
+                "removeProcInst",
+                "removeComments",
+                "removeMetadata",
+                "removeEditorData",
+                "removeEmptyAttrs",
+                "removeEmptyText",
+                "removeEmptyContainers",
+                "removeHiddenElems",
+                "removeUnusedNamespaces",
+                "cleanupAttrs",
+                "cleanupNumericValues",
+                "convertColors",
+                "removeUnknownsAndDefaults",
+                "sortAttrs",
+                "minifyStyles",
+                "minifyWhitespace",
+            ]
+        );
         assert_eq!(names.len(), 17);
     }
 
@@ -167,15 +187,35 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.preset, Preset::Balanced);
         let names = pass_names(&config);
-        assert_eq!(names, vec![
-            "removeDoctype", "removeProcInst", "removeComments", "removeMetadata",
-            "removeEditorData", "removeEmptyAttrs", "removeEmptyText",
-            "removeEmptyContainers", "removeHiddenElems", "removeUnusedNamespaces",
-            "cleanupAttrs", "inlineStyles", "cleanupNumericValues", "convertColors",
-            "removeUnknownsAndDefaults", "convertShapeToPath", "convertTransform",
-            "collapseGroups", "cleanupIds", "convertPathData", "mergePaths",
-            "sortAttrs", "minifyStyles", "minifyWhitespace",
-        ]);
+        assert_eq!(
+            names,
+            vec![
+                "removeDoctype",
+                "removeProcInst",
+                "removeComments",
+                "removeMetadata",
+                "removeEditorData",
+                "removeEmptyAttrs",
+                "removeEmptyText",
+                "removeEmptyContainers",
+                "removeHiddenElems",
+                "removeUnusedNamespaces",
+                "cleanupAttrs",
+                "inlineStyles",
+                "cleanupNumericValues",
+                "convertColors",
+                "removeUnknownsAndDefaults",
+                "convertShapeToPath",
+                "convertTransform",
+                "collapseGroups",
+                "cleanupIds",
+                "convertPathData",
+                "mergePaths",
+                "sortAttrs",
+                "minifyStyles",
+                "minifyWhitespace",
+            ]
+        );
         assert_eq!(names.len(), 24);
     }
 
@@ -199,7 +239,10 @@ mod tests {
                 ..Config::default()
             };
             let names = pass_names(&config);
-            assert!(!names.contains(&"removeDesc"), "removeDesc should not be in {preset:?}");
+            assert!(
+                !names.contains(&"removeDesc"),
+                "removeDesc should not be in {preset:?}"
+            );
         }
     }
 
@@ -229,9 +272,23 @@ mod tests {
 
     #[test]
     fn effective_precision_defaults() {
-        assert_eq!(Config { preset: Preset::Safe, ..Config::default() }.effective_precision(), 3);
+        assert_eq!(
+            Config {
+                preset: Preset::Safe,
+                ..Config::default()
+            }
+            .effective_precision(),
+            3
+        );
         assert_eq!(Config::default().effective_precision(), 3);
-        assert_eq!(Config { preset: Preset::Aggressive, ..Config::default() }.effective_precision(), 2);
+        assert_eq!(
+            Config {
+                preset: Preset::Aggressive,
+                ..Config::default()
+            }
+            .effective_precision(),
+            2
+        );
     }
 
     #[test]
@@ -255,13 +312,30 @@ mod tests {
             .collect();
 
         let old_names: Vec<&str> = vec![
-            "removeDoctype", "removeProcInst", "removeComments", "removeMetadata",
-            "removeEditorData", "removeEmptyAttrs", "removeEmptyText",
-            "removeEmptyContainers", "removeHiddenElems", "removeUnusedNamespaces",
-            "cleanupAttrs", "inlineStyles", "cleanupNumericValues", "convertColors",
-            "removeUnknownsAndDefaults", "convertShapeToPath", "convertTransform",
-            "collapseGroups", "cleanupIds", "convertPathData", "mergePaths",
-            "sortAttrs", "minifyStyles", "minifyWhitespace",
+            "removeDoctype",
+            "removeProcInst",
+            "removeComments",
+            "removeMetadata",
+            "removeEditorData",
+            "removeEmptyAttrs",
+            "removeEmptyText",
+            "removeEmptyContainers",
+            "removeHiddenElems",
+            "removeUnusedNamespaces",
+            "cleanupAttrs",
+            "inlineStyles",
+            "cleanupNumericValues",
+            "convertColors",
+            "removeUnknownsAndDefaults",
+            "convertShapeToPath",
+            "convertTransform",
+            "collapseGroups",
+            "cleanupIds",
+            "convertPathData",
+            "mergePaths",
+            "sortAttrs",
+            "minifyStyles",
+            "minifyWhitespace",
         ];
 
         assert_eq!(new_names, old_names);
