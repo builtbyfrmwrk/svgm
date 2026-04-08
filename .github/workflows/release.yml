@@ -61,9 +61,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
@@ -76,7 +76,7 @@ jobs:
         run: |
           node -e "const p = require('./pkg/package.json'); if (p.name !== '@frmwrksoftware/wasm') throw new Error('unexpected name: ' + p.name)"
         working-directory: crates/svgm-wasm
-      - run: npm publish --access public --provenance
+      - run: npm publish --access public
         working-directory: crates/svgm-wasm/pkg
 
   release:
