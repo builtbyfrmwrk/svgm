@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2
+
+### Fixed
+
+- **Path merging no longer breaks overlapping paths.** Previously, `mergePaths` would merge adjacent paths based solely on matching attributes, which broke SVGs with overlapping paths and `fill-rule="evenodd"` (e.g. the McDonald's logo). Now uses geometric intersection detection (AABB + convex hull GJK, ported from SVGO) to skip merging when paths overlap.
+
+### Improved
+
+- `mergePaths` now blocks merging when `clip-path`, `mask`, or `mask-image` is present on the element or inherited from ancestors.
+- `mergePaths` now blocks merging when `fill`, `stroke`, or `filter` contains a `url()` reference (gradient/pattern bounding box changes when paths are combined).
+- Ancestor attribute inheritance check for all blocking properties (markers, clip-path, mask).
+
 ## 0.2.1
 
 ### Added

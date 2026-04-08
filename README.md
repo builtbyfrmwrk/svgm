@@ -166,7 +166,7 @@ Passes operate directly on the in-memory AST, avoiding repeated serialize/parse 
 
 **Geometry** — compress path data
 - Shape-to-path conversion (rect, circle, ellipse, line, polyline, polygon → shorter `<path>`)
-- Path merging (adjacent paths with identical attributes)
+- Path merging (adjacent non-overlapping paths with identical attributes, with geometric intersection safety)
 - Absolute-to-relative coordinate conversion where shorter
 - `L` to `H`/`V` shortcut commands
 - `C` to `S` and `Q` to `T` shorthand curves (reflected control points)
@@ -233,7 +233,7 @@ svgm/
 - [x] CSS `<style>` inlining and minification
 - [x] Recursive directory processing (`-r`)
 - [x] Safety presets and config file support
-- [ ] WASM build for browser usage
+- [x] WASM build for browser usage
 - [ ] Node.js bindings via napi-rs
 
 ## Contributing
