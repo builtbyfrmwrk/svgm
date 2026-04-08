@@ -52,8 +52,6 @@ jobs:
   wasm:
     name: Publish WASM to npm
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -72,7 +70,7 @@ jobs:
       - name: Verify package name
         run: node -e "const p = require('./pkg/package.json'); if (p.name !== '@frmwrksoftware/wasm') throw new Error('unexpected name: ' + p.name)"
         working-directory: crates/svgm-wasm
-      - run: npm publish --access public --provenance
+      - run: npm publish --access public
         working-directory: crates/svgm-wasm/pkg
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
