@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -75,6 +74,8 @@ jobs:
         working-directory: crates/svgm-wasm
       - run: npm publish --access public --provenance
         working-directory: crates/svgm-wasm/pkg
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   release:
     name: Create Release
