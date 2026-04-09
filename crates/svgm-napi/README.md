@@ -1,11 +1,7 @@
 <p align="center">
   <br>
   <a href="https://github.com/madebyfrmwrk/svgm">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/madebyfrmwrk/svgm/main/assets/svgm-dark.svg">
-      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/madebyfrmwrk/svgm/main/assets/svgm-light.svg">
-      <img alt="svgm" src="https://raw.githubusercontent.com/madebyfrmwrk/svgm/main/assets/svgm-light.svg" height="42">
-    </picture>
+    <img alt="svgm" src="https://raw.githubusercontent.com/madebyfrmwrk/svgm/main/assets/svgm-light.svg" height="72">
   </a>
   <br>
   <br>
