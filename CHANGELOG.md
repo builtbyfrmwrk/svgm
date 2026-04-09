@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+### Fixed
+
+- Fixed release workflow to properly publish platform-specific npm packages (`svgm-node-darwin-arm64`, etc.) as optional dependencies. Previously only the main `svgm-node` package was published without the native binaries.
+
 ## 0.3.4
 
 ### Fixed
