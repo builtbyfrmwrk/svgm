@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6
+
+### Fixed
+
+- Fixed napi npm publish to use OIDC trusted publishing (`--provenance`) for platform packages instead of token auth.
+
 ## 0.3.5
 
 ### Fixed
