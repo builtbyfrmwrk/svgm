@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.7
+
+### Fixed
+
+- Fixed napi npm publish: bundle all platform `.node` binaries directly in the `svgm-node` package instead of publishing separate platform packages. One package, trusted publishing, green tick.
+
 ## 0.3.6
 
 ### Fixed

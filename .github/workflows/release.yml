@@ -137,20 +137,6 @@ jobs:
           pattern: napi-*
           path: crates/svgm-napi
           merge-multiple: true
-      - run: npm install
-        working-directory: crates/svgm-napi
-      - run: npx napi create-npm-dirs
-        working-directory: crates/svgm-napi
-      - run: npx napi artifacts --output-dir .
-        working-directory: crates/svgm-napi
-      - run: npx napi pre-publish --no-gh-release --skip-optional-publish
-        working-directory: crates/svgm-napi
-      - name: Publish platform packages
-        working-directory: crates/svgm-napi
-        run: |
-          for dir in npm/*/; do
-            npm publish "$dir" --access public --provenance
-          done
       - run: npm publish --access public --provenance
         working-directory: crates/svgm-napi
 
