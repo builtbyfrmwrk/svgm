@@ -1,6 +1,6 @@
 {
   "name": "svgm-node",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "svgm SVG optimizer — Node.js native addon",
   "license": "MIT OR Apache-2.0",
   "repository": {
@@ -9,6 +9,9 @@
   },
   "main": "index.js",
   "types": "index.d.ts",
+  "bin": {
+    "svgm": "bin/svgm.mjs"
+  },
   "napi": {
     "binaryName": "svgm-napi",
     "targets": [
@@ -22,6 +25,7 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "bin/",
     "LICENSE-APACHE",
     "LICENSE-MIT"
   ],

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+### Added
+
+- **CLI in npm package** — `npm install svgm-node` now provides a `svgm` command. Supports input files, `-o`, `--stdout`, `--preset`, `--precision`, `--dry-run`, `--quiet`, and pipe detection. Zero dependencies (uses Node's built-in `parseArgs`). For the full CLI (recursive mode, config files, progress bars), use `cargo install svgm`.
+
 ## 0.3.2
 
 ### Added

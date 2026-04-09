@@ -37,7 +37,25 @@ Prebuilt binaries are available for:
 | macOS | x64, arm64 (Apple Silicon) |
 | Windows | x64 |
 
-## Usage
+## CLI
+
+Installing the package also provides a `svgm` command:
+
+```bash
+svgm icon.svg                    # Optimize in place
+svgm icon.svg -o icon.min.svg    # Write to different file
+svgm icon.svg --stdout           # Print to stdout
+svgm icon.svg --dry-run          # Preview without writing
+svgm icon.svg --preset safe      # Safe preset (20 passes)
+svgm icon.svg --precision 2      # Override numeric precision
+svgm *.svg                       # Multiple files
+```
+
+When piped, output goes to stdout automatically.
+
+> For the full-featured CLI (recursive directory mode, config files, progress bars), install via Rust: `cargo install svgm`
+
+## JavaScript API
 
 ```js
 const { optimize, version } = require('svgm-node');
