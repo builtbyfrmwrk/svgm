@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { optimize, version } from '../index.js';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const { optimize, version } = require(join(dirname(fileURLToPath(import.meta.url)), '..', 'index.js'));
 
 const { values: flags, positionals: files } = parseArgs({
   allowPositionals: true,
