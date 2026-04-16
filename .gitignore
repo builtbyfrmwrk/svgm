@@ -1,8 +1,26 @@
+# Rust
 /target
 Cargo.lock
+
+# Editor / OS
 *.swp
 *.swo
 .DS_Store
-CLAUDE.md
-crates/svgm-core/benches/report.json
 .idea/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Node.js
+node_modules/
+*.node
+
+# NAPI platform scaffold (obsolete since v0.3.7 bundled model)
+crates/svgm-napi/npm/
+
+# WASM build output
+crates/svgm-wasm/pkg/
+
+# Benchmarks
+crates/svgm-core/benches/report.json

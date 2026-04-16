@@ -198,6 +198,7 @@ SVGM is conservative by default:
 - Animation elements (`<animate>`, `<animateTransform>`, etc.) are **fully preserved**
 - `<foreignObject>` content is **never touched**
 - `fill="black"` on `<svg>` is **kept** (inherited by children)
+- Default attributes are only removed when **safe to inherit** — ancestor chain is checked first
 
 ## Rust API
 

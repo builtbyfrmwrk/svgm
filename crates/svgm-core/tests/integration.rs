@@ -157,6 +157,19 @@ fn regression_foreign_object() {
     assert!(output.contains("Hello world"));
 }
 
+#[test]
+fn regression_fill_inherit_none() {
+    let (output, _, _) =
+        optimize_file(Path::new("tests/fixtures/regression/fill_inherit_none.svg"));
+    assert_valid_svg(&output, "fill_inherit_none");
+    // The path must retain fill="black" because the parent <svg> has fill="none".
+    // Removing it would make the path inherit fill="none" and become invisible.
+    assert!(
+        output.contains("fill=\"black\"") || output.contains("fill=\"#000\""),
+        "path fill must be preserved when parent svg has fill=none: {output}"
+    );
+}
+
 // ── Path torture fixtures ───────────────────────────────────────────────
 
 #[test]

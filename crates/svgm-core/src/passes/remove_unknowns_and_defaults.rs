@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use super::{Pass, PassResult};
-use crate::ast::{Document, NodeKind};
+use crate::ast::{Document, NodeId, NodeKind};
 
 pub struct RemoveUnknownsAndDefaults;
 
@@ -81,6 +83,76 @@ const SKIP_FILL_REMOVAL: &[&str] = &[
     "svg",
 ];
 
+/// Inheritable presentation attributes (matches SVGO's inheritableAttrs minus
+/// presentationNonInheritableGroupAttrs). These inherit from parent to child
+/// in the SVG cascade.
+const INHERITABLE_ATTRS: &[&str] = &[
+    "clip-rule",
+    "color",
+    "color-interpolation",
+    "color-interpolation-filters",
+    "color-profile",
+    "cursor",
+    "direction",
+    "dominant-baseline",
+    "fill",
+    "fill-opacity",
+    "fill-rule",
+    "font",
+    "font-family",
+    "font-size",
+    "font-size-adjust",
+    "font-stretch",
+    "font-style",
+    "font-variant",
+    "font-weight",
+    "image-rendering",
+    "letter-spacing",
+    "marker",
+    "marker-end",
+    "marker-mid",
+    "marker-start",
+    "paint-order",
+    "pointer-events",
+    "shape-rendering",
+    "stroke",
+    "stroke-dasharray",
+    "stroke-dashoffset",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "stroke-miterlimit",
+    "stroke-opacity",
+    "stroke-width",
+    "text-anchor",
+    "text-rendering",
+    "visibility",
+    "word-spacing",
+    "writing-mode",
+];
+
+/// Compute the inherited value for each inheritable attribute by walking the
+/// ancestor chain. Returns a map of attr_name → nearest ancestor's value.
+/// Matches SVGO's computeStyle ancestor-walking logic.
+fn compute_inherited_values(doc: &Document, id: NodeId) -> HashMap<String, String> {
+    let mut values = HashMap::new();
+    let mut current = doc.node(id).parent;
+    while let Some(parent_id) = current {
+        if let NodeKind::Element(ref elem) = doc.node(parent_id).kind {
+            for attr in &elem.attributes {
+                if attr.prefix.is_none()
+                    && INHERITABLE_ATTRS.contains(&attr.name.as_str())
+                    && !values.contains_key(&attr.name)
+                {
+                    // Nearest ancestor wins — don't overwrite
+                    values.insert(attr.name.clone(), attr.value.clone());
+                }
+            }
+        }
+        current = doc.node(parent_id).parent;
+    }
+    values
+}
+
 impl Pass for RemoveUnknownsAndDefaults {
     fn name(&self) -> &'static str {
         "removeUnknownsAndDefaults"
@@ -91,9 +163,17 @@ impl Pass for RemoveUnknownsAndDefaults {
         let ids = doc.traverse();
 
         for id in ids {
+            // Phase 1: compute inherited attribute values (immutable borrow)
+            let inherited = compute_inherited_values(doc, id);
+
+            // Phase 2: mutate attributes (mutable borrow)
             let node = doc.node_mut(id);
             if let NodeKind::Element(ref mut elem) = node.kind {
                 let elem_name = elem.name.clone();
+                let has_id = elem
+                    .attributes
+                    .iter()
+                    .any(|a| a.prefix.is_none() && a.name == "id");
                 let before = elem.attributes.len();
 
                 elem.attributes.retain(|attr| {
@@ -120,12 +200,40 @@ impl Pass for RemoveUnknownsAndDefaults {
                         return true;
                     }
 
-                    // Check if this attr=value pair matches a known default
+                    // SVGO parity: skip default removal and useless override removal
+                    // for elements with id (CSS/JS may target them)
+                    if has_id {
+                        return true;
+                    }
+
                     let is_default = DEFAULT_ATTRS
                         .iter()
                         .any(|&(name, val)| attr.name == name && attr.value == val);
+                    let is_inheritable = INHERITABLE_ATTRS.contains(&attr.name.as_str());
 
-                    !is_default
+                    // Check A (SVGO defaultAttrs): remove known defaults
+                    if is_default {
+                        if is_inheritable {
+                            // Only remove if NO ancestor has this property at all.
+                            // If any ancestor sets it, keep — removing would change
+                            // the inherited value. (Falls through to Check B.)
+                            if !inherited.contains_key(&attr.name) {
+                                return false;
+                            }
+                        } else {
+                            // Non-inheritable default → always safe to remove
+                            return false;
+                        }
+                    }
+
+                    // Check B (SVGO uselessOverrides): remove attrs that duplicate
+                    // the inherited value (redundant override)
+                    if is_inheritable && inherited.get(&attr.name).is_some_and(|v| *v == attr.value)
+                    {
+                        return false;
+                    }
+
+                    true
                 });
 
                 if elem.attributes.len() != before {
@@ -225,6 +333,101 @@ mod tests {
         assert!(
             !output.contains("fill"),
             "fill=#000000 should be removed: {output}"
+        );
+    }
+
+    #[test]
+    fn keeps_fill_black_when_parent_has_fill_none() {
+        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\"><path fill=\"black\" d=\"M0 0\"/></svg>";
+        let mut doc = parse(input).unwrap();
+        RemoveUnknownsAndDefaults.run(&mut doc);
+        let output = serialize(&doc);
+        assert!(
+            output.contains("fill=\"black\""),
+            "fill=black must be kept when parent has fill=none: {output}"
+        );
+    }
+
+    #[test]
+    fn keeps_fill_black_with_grandparent_override() {
+        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"red\"><g><path fill=\"black\" d=\"M0 0\"/></g></svg>";
+        let mut doc = parse(input).unwrap();
+        RemoveUnknownsAndDefaults.run(&mut doc);
+        let output = serialize(&doc);
+        assert!(
+            output.contains("fill=\"black\""),
+            "fill=black must be kept when grandparent has fill=red: {output}"
+        );
+    }
+
+    #[test]
+    fn keeps_stroke_none_when_parent_has_stroke() {
+        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\" stroke=\"red\"><path stroke=\"none\" d=\"M0 0\"/></svg>";
+        let mut doc = parse(input).unwrap();
+        RemoveUnknownsAndDefaults.run(&mut doc);
+        let output = serialize(&doc);
+        assert!(
+            output.contains("stroke=\"none\""),
+            "stroke=none must be kept when parent has stroke=red: {output}"
+        );
+    }
+
+    #[test]
+    fn removes_useless_override_same_value() {
+        // Parent has fill="red", child has fill="red" → useless override, remove
+        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"red\"><path fill=\"red\" d=\"M0 0\"/></svg>";
+        let mut doc = parse(input).unwrap();
+        RemoveUnknownsAndDefaults.run(&mut doc);
+        let output = serialize(&doc);
+        // Child's fill="red" should be removed (matches inherited value)
+        assert_eq!(
+            output.matches("fill=\"red\"").count(),
+            1,
+            "child fill=red should be removed as useless override: {output}"
+        );
+    }
+
+    #[test]
+    fn keeps_default_when_parent_has_same_attr_different_value() {
+        // Parent has fill="black" → computedParentStyle['fill'] is non-null →
+        // Check A skips. Check B: "black" != "#000" → keeps. Matches SVGO.
+        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"black\"><path fill=\"#000\" d=\"M0 0\"/></svg>";
+        let mut doc = parse(input).unwrap();
+        RemoveUnknownsAndDefaults.run(&mut doc);
+        let output = serialize(&doc);
+        // SVGO keeps this because the string values differ, even though semantically both are black.
+        // (convert_colors normalizes these before this pass runs in practice.)
+        assert!(
+            output.contains("fill=\"#000\""),
+            "fill=#000 should be kept when parent has fill=black (different string): {output}"
+        );
+    }
+
+    #[test]
+    fn removes_useless_override_exact_match() {
+        // Parent has fill="black", child has fill="black" → exact match → remove
+        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"black\"><path fill=\"black\" d=\"M0 0\"/></svg>";
+        let mut doc = parse(input).unwrap();
+        RemoveUnknownsAndDefaults.run(&mut doc);
+        let output = serialize(&doc);
+        // svg keeps fill="black" (SKIP_FILL_REMOVAL), path's is removed (useless override)
+        assert_eq!(
+            output.matches("fill=\"black\"").count(),
+            1,
+            "child fill=black should be removed as useless override: {output}"
+        );
+    }
+
+    #[test]
+    fn keeps_defaults_on_element_with_id() {
+        // SVGO skips default removal for elements with id
+        let input = "<svg xmlns=\"http://www.w3.org/2000/svg\"><path id=\"a\" fill=\"black\" d=\"M0 0\"/></svg>";
+        let mut doc = parse(input).unwrap();
+        RemoveUnknownsAndDefaults.run(&mut doc);
+        let output = serialize(&doc);
+        assert!(
+            output.contains("fill=\"black\""),
+            "fill=black should be kept on element with id: {output}"
         );
     }
 }

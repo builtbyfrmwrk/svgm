@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8
+
+### Fixed
+
+- **Fixed invisible SVG elements when ancestor overrides `fill` or `stroke`.** The `removeUnknownsAndDefaults` pass now walks the ancestor chain before removing attributes that match SVG spec defaults. Previously, `fill="black"` was removed even when a parent had `fill="none"`, causing elements to inherit the wrong value and become invisible. Now matches SVGO's behavior: Check A only removes defaults when no ancestor has the property; Check B removes useless overrides (child value matches inherited value). Elements with `id` are skipped (may be CSS/JS targets).
+
 ## 0.3.7
 
 ### Fixed
